@@ -29,7 +29,9 @@ public final class Patches {
                 enumHelperFieldWrites(),
                 securityManager(),
                 systemClassPath(),
-                mixinClassBytes());
+                mixinClassBytes(),
+                log4jMessageLookups(),
+                log4jJndi());
     }
 
     /**
@@ -199,5 +201,27 @@ public final class Patches {
      */
     static ClassPatch mixinModernAsm() {
         return new RelocatedAsmPatch("mixin-modern-asm", "org/spongepowered/", "org/spongepowered/asm/lib/");
+    }
+
+    /**
+     * Log4Shell (CVE-2021-44228, CVE-2021-45046, CVE-2021-45105). Minecraft 1.8.9 ships Log4j 2.0-beta9, which expands
+     * {@code ${...}} lookups inside logged messages, such as chat from a server. Stop interpolating messages, as Log4j
+     * 2.15+ does.
+     */
+    static ClassPatch log4jMessageLookups() {
+        return new RedirectPatch(
+                "log4shell-message-lookups",
+                Set.of("org/apache/logging/log4j/core/pattern/MessagePatternConverter"),
+                Opcodes.INVOKEVIRTUAL,
+                "org/apache/logging/log4j/core/lookup/StrSubstitutor",
+                "replace",
+                "(Lorg/apache/logging/log4j/core/LogEvent;Ljava/lang/String;)Ljava/lang/String;",
+                "lol/trq/lazarus/compat/Log4jHooks",
+                "messageWithoutLookups");
+    }
+
+    /** Log4Shell, defence in depth: the {@code jndi} lookup resolves to nothing anywhere it is used. */
+    static ClassPatch log4jJndi() {
+        return new NullReturnPatch("log4shell-jndi", "org/apache/logging/log4j/core/lookup/JndiLookup", "lookup");
     }
 }
