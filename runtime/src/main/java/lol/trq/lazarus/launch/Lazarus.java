@@ -67,6 +67,10 @@ public final class Lazarus {
             throw new IllegalStateException("the Lazarus agent is not installed; add -javaagent:<lazarus jar>");
         }
         LinuxNatives.prepare();
+        if (Security.base64IntrinsicsEnabled()) {
+            LOG.warn("Base64 intrinsics are on and this JVM may be affected by CVE-2026-114938 (Java4Shell); "
+                    + "start it with -XX:-UseBASE64Intrinsics or update the JDK");
+        }
         LaunchArguments parsed = LaunchArguments.parse(args);
         LaunchClassLoader loader = createClassLoader(Classpath.current());
         Launch.classLoader = loader;

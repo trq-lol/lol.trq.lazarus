@@ -27,7 +27,9 @@ final class Bootstrap {
     static final List<String> JVM_FLAGS = List.of(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "--enable-native-access=ALL-UNNAMED",
-            "--sun-misc-unsafe-memory-access=allow");
+            "--sun-misc-unsafe-memory-access=allow",
+            // Java4Shell (CVE-2026-114938): the AVX-512 Base64 decode intrinsic corrupts the heap on Java 17+.
+            "-XX:-UseBASE64Intrinsics");
 
     private Bootstrap() {}
 
@@ -46,20 +48,18 @@ final class Bootstrap {
         List<String> classpath = classpath();
         List<String> fixedClasspath = fixClasspath(classpath, self);
         boolean agent = LazarusAgent.installed();
-        if (agent && fixedClasspath.equals(classpath)) {
+        boolean base64Safe = !Security.base64IntrinsicsEnabled();
+        if (agent && fixedClasspath.equals(classpath) && base64Safe) {
             return Optional.empty();
         }
         List<String> command = new ArrayList<>();
         for (String arg : inputArguments()) {
-            if (!arg.startsWith("-Djava.class.path=") && !isOurAgent(arg)) {
+            if (!arg.startsWith("-Djava.class.path=") && !isOurAgent(arg) && !overridesSafetyFlag(arg)) {
                 command.add(arg);
             }
         }
-        for (String flag : JVM_FLAGS) {
-            if (!command.contains(flag)) {
-                command.add(flag);
-            }
-        }
+        // Lazarus's flags go last so they win over anything the launcher passed.
+        command.addAll(JVM_FLAGS);
         command.add("-javaagent:" + self.getAbsolutePath());
         command.add("-D" + RELAUNCHED + "=true");
         command.add("-cp");
@@ -72,7 +72,8 @@ final class Bootstrap {
         Files.writeString(argfile, toArgfile(command), StandardCharsets.UTF_8);
         System.err.println("[Lazarus] relaunching: "
                 + (agent ? "" : "agent not installed; ")
-                + (fixedClasspath.equals(classpath) ? "" : "class path reordered for ASM 9"));
+                + (fixedClasspath.equals(classpath) ? "" : "class path reordered for ASM 9; ")
+                + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938)"));
         Process child =
                 new ProcessBuilder(javaExecutable(), "@" + argfile).inheritIO().start();
         Runtime.getRuntime().addShutdownHook(new Thread(child::destroy, "lazarus-relaunch-reaper"));
@@ -118,6 +119,11 @@ final class Bootstrap {
                     .append(System.lineSeparator());
         }
         return out.toString();
+    }
+
+    /** Whether a JVM argument sets the Base64 intrinsics, which Lazarus always turns off (CVE-2026-114938). */
+    static boolean overridesSafetyFlag(String arg) {
+        return arg.matches("-XX:[+-]UseBASE64Intrinsics");
     }
 
     private static boolean isOurAgent(String arg) {

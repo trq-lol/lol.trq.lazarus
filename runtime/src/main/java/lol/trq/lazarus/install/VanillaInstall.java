@@ -36,7 +36,8 @@ public final class VanillaInstall {
     static final List<String> JVM_FLAGS = List.of(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "--enable-native-access=ALL-UNNAMED",
-            "--sun-misc-unsafe-memory-access=allow");
+            "--sun-misc-unsafe-memory-access=allow",
+            "-XX:-UseBASE64Intrinsics");
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();

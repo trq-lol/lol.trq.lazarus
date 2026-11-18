@@ -5,6 +5,7 @@
   "jvmArgs": [
     "-XX:+IgnoreUnrecognizedVMOptions",
     "--enable-native-access=ALL-UNNAMED",
-    "--sun-misc-unsafe-memory-access=allow"
+    "--sun-misc-unsafe-memory-access=allow",
+    "-XX:-UseBASE64Intrinsics"
   ]
 }

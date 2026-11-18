@@ -63,6 +63,14 @@ class LaunchTest {
     }
 
     @Test
+    void safetyFlagsAlwaysWin() {
+        assertTrue(Bootstrap.JVM_FLAGS.contains("-XX:-UseBASE64Intrinsics"));
+        assertTrue(Bootstrap.overridesSafetyFlag("-XX:+UseBASE64Intrinsics"));
+        assertTrue(Bootstrap.overridesSafetyFlag("-XX:-UseBASE64Intrinsics"));
+        assertEquals(false, Bootstrap.overridesSafetyFlag("-Xmx2G"));
+    }
+
+    @Test
     void argfileQuotesAndEscapes() {
         String file = Bootstrap.toArgfile(List.of("-cp", "C:\\Users\\A B\\x.jar", "say \"hi\""));
         String nl = System.lineSeparator();

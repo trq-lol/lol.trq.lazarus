@@ -108,7 +108,8 @@ public final class DevLaunch {
             command.addAll(List.of(
                     "-XX:+IgnoreUnrecognizedVMOptions",
                     "--enable-native-access=ALL-UNNAMED",
-                    "--sun-misc-unsafe-memory-access=allow"));
+                    "--sun-misc-unsafe-memory-access=allow",
+                    "-XX:-UseBASE64Intrinsics"));
             command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
                     .filter(s -> !s.isBlank())
                     .toList());
