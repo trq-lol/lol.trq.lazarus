@@ -328,7 +328,7 @@ public final class DevLaunch {
         return target;
     }
 
-    private static boolean allowed(JsonObject lib) {
+    static boolean allowed(JsonObject lib) {
         if (!lib.has("rules")) {
             return true;
         }

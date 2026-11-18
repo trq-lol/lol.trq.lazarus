@@ -77,7 +77,9 @@ final class Bootstrap {
         Files.writeString(argfile, toArgfile(command), StandardCharsets.UTF_8);
         System.err.println("[Lazarus] relaunching: "
                 + (agent ? "" : "agent not installed; ")
-                + (fixedClasspath.equals(classpath) ? "" : "class path reordered for ASM 9; ")
+                + (fixedClasspath.equals(classpath)
+                        ? ""
+                        : "class path fixed (ASM 9 first, LWJGL 2 dropped when on LWJGL 3); ")
                 + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938); ")
                 + (needsFirstThread ? "-XstartOnFirstThread for GLFW on macOS" : ""));
         Process child =

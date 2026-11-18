@@ -63,6 +63,9 @@ public final class ProfileLaunch {
                 if (lib.has("clientreq") && !lib.get("clientreq").getAsBoolean()) {
                     continue;
                 }
+                if (!DevLaunch.allowed(lib)) {
+                    continue;
+                }
                 String path = lib.has("downloads")
                         ? lib.getAsJsonObject("downloads")
                                 .getAsJsonObject("artifact")

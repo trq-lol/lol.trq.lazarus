@@ -114,3 +114,64 @@ spotless {
         targetExclude 'src/main/java/org/objectweb/**'
     }
 }
+
+// The LWJGL 3 option: the compatibility jar travels inside the Lazarus jar, and a manifest of the LWJGL 3 artifacts
+// (with per-platform natives, SHA-1 and size) lets the installer write library entries a launcher can download.
+evaluationDependsOn(':lwjgl3')
+def lwjgl3Version = project(':lwjgl3').ext.lwjgl3Version
+def lwjgl3Modules = ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-openal']
+def lwjgl3Natives = [
+    windows: ['natives-windows'],
+    linux: ['natives-linux'],
+    osx: ['natives-macos', 'natives-macos-arm64'],
+]
+
+configurations {
+    lwjgl3Dist { transitive = false }
+}
+
+dependencies {
+    lwjgl3Modules.each { m ->
+        lwjgl3Dist "org.lwjgl:${m}:${lwjgl3Version}"
+        lwjgl3Natives.values().flatten().each { c -> lwjgl3Dist "org.lwjgl:${m}:${lwjgl3Version}:${c}" }
+    }
+}
+
+def lwjgl3Bundle = tasks.register('lwjgl3Bundle') {
+    def jar = project(':lwjgl3').tasks.named('jar')
+    def out = layout.buildDirectory.dir('generated/lwjgl3Bundle')
+    inputs.files(jar)
+    inputs.files(configurations.lwjgl3Dist)
+    outputs.dir(out)
+    doLast {
+        def dir = out.get().dir('META-INF/lazarus').asFile
+        dir.mkdirs()
+        java.nio.file.Files.copy(jar.get().archiveFile.get().asFile.toPath(), new File(dir, 'lwjgl3.jar').toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        def entries = []
+        configurations.lwjgl3Dist.resolvedConfiguration.resolvedArtifacts.each { a ->
+            def id = a.moduleVersion.id
+            def classifier = a.classifier
+            def os = classifier == null ? null : lwjgl3Natives.find { k, v -> v.contains(classifier) }?.key
+            def arch = classifier == 'natives-macos-arm64' ? 'arm64' : (classifier == 'natives-macos' ? 'x86_64' : null)
+            def path = "${id.group.replace('.', '/')}/${id.name}/${id.version}/${a.file.name}"
+            def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(a.file.bytes).encodeHex().toString()
+            entries << [
+                name: "${id.group}:${id.name}:${id.version}" + (classifier ? ":${classifier}" : ''),
+                path: path,
+                url: "https://repo1.maven.org/maven2/${path}",
+                sha1: sha1,
+                size: a.file.length(),
+                os: os,
+                arch: arch,
+            ]
+        }
+        new File(dir, 'lwjgl3-libraries.json').text = groovy.json.JsonOutput.prettyPrint(
+                groovy.json.JsonOutput.toJson([version: lwjgl3Version, libraries: entries.sort { it.name }]))
+    }
+}
+
+tasks.named('shadowJar') {
+    dependsOn lwjgl3Bundle
+    from(lwjgl3Bundle)
+}

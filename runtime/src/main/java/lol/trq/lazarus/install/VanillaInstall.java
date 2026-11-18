@@ -104,6 +104,24 @@ public final class VanillaInstall {
      * @throws IOException if a file cannot be read or written
      */
     public Result install(String forgeId, String profileName, int maxMemoryMb) throws IOException {
+        return install(forgeId, profileName, maxMemoryMb, false);
+    }
+
+    /**
+     * Installs Lazarus on top of a Forge version, optionally on LWJGL 3.
+     *
+     * <p>The LWJGL 3 install is a separate version and profile; the LWJGL 2 one keeps working beside it. The launcher
+     * downloads LWJGL 3 from Maven Central, verified by SHA-1. Minecraft's own LWJGL 2 stays in the inherited library
+     * list, which a launcher cannot remove; Lazarus drops it from the class path when it starts.
+     *
+     * @param forgeId the Forge version id
+     * @param profileName the launcher profile's display name
+     * @param maxMemoryMb the profile's {@code -Xmx}, in megabytes
+     * @param lwjgl3 whether to run on LWJGL 3
+     * @return what was installed
+     * @throws IOException if a file cannot be read or written
+     */
+    public Result install(String forgeId, String profileName, int maxMemoryMb, boolean lwjgl3) throws IOException {
         Path forgeJson = minecraftDir.resolve("versions").resolve(forgeId).resolve(forgeId + ".json");
         if (!Files.isRegularFile(forgeJson)) {
             throw new IOException("Forge version " + forgeId + " is not installed in " + minecraftDir
@@ -117,10 +135,14 @@ public final class VanillaInstall {
             Files.copy(selfJar, library, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String versionId = forgeId + "-lazarus";
+        String versionId = forgeId + (lwjgl3 ? "-lazarus-lwjgl3" : "-lazarus");
         Path versionJson = minecraftDir.resolve("versions").resolve(versionId).resolve(versionId + ".json");
         Files.createDirectories(versionJson.getParent());
-        Files.writeString(versionJson, GSON.toJson(versionJson(versionId, forgeId, libraryPath, library)));
+        JsonObject json = versionJson(versionId, forgeId, libraryPath, library);
+        if (lwjgl3) {
+            addLwjgl3(json.getAsJsonArray("libraries"));
+        }
+        Files.writeString(versionJson, GSON.toJson(json));
 
         Path profiles = minecraftDir.resolve("launcher_profiles.json");
         JsonObject root = Files.isRegularFile(profiles)
@@ -135,7 +157,7 @@ public final class VanillaInstall {
         if (!root.has("profiles")) {
             root.add("profiles", new JsonObject());
         }
-        String profileKey = "lazarus-" + forgeId;
+        String profileKey = (lwjgl3 ? "lazarus-lwjgl3-" : "lazarus-") + forgeId;
         root.getAsJsonObject("profiles").add(profileKey, profile(profileName, versionId, library, maxMemoryMb));
         Files.writeString(profiles, GSON.toJson(root));
         return new Result(versionId, profileKey, library, versionJson);
@@ -170,6 +192,70 @@ public final class VanillaInstall {
         java.addProperty("majorVersion", RUNTIME_MAJOR);
         json.add("javaVersion", java);
         return json;
+    }
+
+    /** Adds the bundled LWJGL 3 compatibility jar and the LWJGL 3 artifacts, natives limited to their OS. */
+    private void addLwjgl3(JsonArray libraries) throws IOException {
+        String compatPath =
+                "lol/trq/lazarus/lol.trq.lazarus-lwjgl3/" + version + "/lol.trq.lazarus-lwjgl3-" + version + ".jar";
+        Path compat = minecraftDir.resolve("libraries").resolve(compatPath);
+        Files.createDirectories(compat.getParent());
+        try (var in = VanillaInstall.class.getResourceAsStream("/META-INF/lazarus/lwjgl3.jar")) {
+            if (in == null) {
+                throw new IOException("this Lazarus jar does not contain the LWJGL 3 compatibility layer");
+            }
+            Files.copy(in, compat, StandardCopyOption.REPLACE_EXISTING);
+        }
+        libraries.add(library(
+                "lol.trq.lazarus:lol.trq.lazarus-lwjgl3:" + version,
+                compatPath,
+                "",
+                sha1(compat),
+                Files.size(compat),
+                null));
+        JsonObject manifest;
+        try (var in = VanillaInstall.class.getResourceAsStream("/META-INF/lazarus/lwjgl3-libraries.json")) {
+            if (in == null) {
+                throw new IOException("this Lazarus jar does not contain the LWJGL 3 library list");
+            }
+            manifest = JsonParser.parseString(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+        }
+        for (var el : manifest.getAsJsonArray("libraries")) {
+            JsonObject l = el.getAsJsonObject();
+            String os = l.has("os") && !l.get("os").isJsonNull() ? l.get("os").getAsString() : null;
+            libraries.add(library(
+                    l.get("name").getAsString(),
+                    l.get("path").getAsString(),
+                    l.get("url").getAsString(),
+                    l.get("sha1").getAsString(),
+                    l.get("size").getAsLong(),
+                    os));
+        }
+    }
+
+    private static JsonObject library(String name, String path, String url, String sha1, long size, String os) {
+        JsonObject artifact = new JsonObject();
+        artifact.addProperty("path", path);
+        artifact.addProperty("sha1", sha1);
+        artifact.addProperty("size", size);
+        artifact.addProperty("url", url);
+        JsonObject downloads = new JsonObject();
+        downloads.add("artifact", artifact);
+        JsonObject lib = new JsonObject();
+        lib.addProperty("name", name);
+        lib.add("downloads", downloads);
+        if (os != null) {
+            JsonObject osRule = new JsonObject();
+            osRule.addProperty("name", os);
+            JsonObject rule = new JsonObject();
+            rule.addProperty("action", "allow");
+            rule.add("os", osRule);
+            JsonArray rules = new JsonArray();
+            rules.add(rule);
+            lib.add("rules", rules);
+        }
+        return lib;
     }
 
     static JsonObject profile(String name, String versionId, Path library, int maxMemoryMb) {

@@ -26,6 +26,7 @@ import javax.swing.UIManager;
  */
 public final class Installer {
     static final String PROFILE_NAME = "Forge 1.8.9 (Lazarus)";
+    static final String PROFILE_NAME_LWJGL3 = "Forge 1.8.9 (Lazarus, LWJGL 3)";
 
     private Installer() {}
 
@@ -59,11 +60,13 @@ public final class Installer {
         Path dir = VanillaInstall.defaultMinecraftDir();
         String forge = null;
         int memory = 2048;
+        boolean lwjgl3 = false;
         for (int i = 1; i < args.length; i++) {
             switch (args[i]) {
                 case "--dir" -> dir = Path.of(args[++i]);
                 case "--forge" -> forge = args[++i];
                 case "--memory" -> memory = Integer.parseInt(args[++i]);
+                case "--lwjgl3" -> lwjgl3 = true;
                 default -> {
                     System.err.println("unknown option: " + args[i] + "\n" + usage());
                     System.exit(2);
@@ -80,7 +83,8 @@ public final class Installer {
             }
             forge = found.get(0);
         }
-        System.out.println(install.install(forge, PROFILE_NAME, memory).describe());
+        String name = lwjgl3 ? PROFILE_NAME_LWJGL3 : PROFILE_NAME;
+        System.out.println(install.install(forge, name, memory, lwjgl3).describe());
     }
 
     private static void gui() throws Exception {
@@ -97,6 +101,11 @@ public final class Installer {
         panel.add(dirField);
         panel.add(new JLabel("Forge 1.8.9 installation:"));
         panel.add(forgeBox);
+        javax.swing.JCheckBox lwjgl3Box = new javax.swing.JCheckBox(
+                "Use LWJGL 3 (needed on Apple silicon Macs)",
+                System.getProperty("os.arch", "").contains("aarch64")
+                        && System.getProperty("os.name", "").toLowerCase().startsWith("mac"));
+        panel.add(lwjgl3Box);
         int choice = JOptionPane.showConfirmDialog(
                 null, panel, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (choice != JOptionPane.OK_OPTION) {
@@ -115,8 +124,9 @@ public final class Installer {
         try {
             VanillaInstall install =
                     new VanillaInstall(Path.of(dirField.getText().trim()), selfJar(), version());
-            String result =
-                    install.install(forge.toString(), PROFILE_NAME, 2048).describe();
+            boolean lwjgl3 = lwjgl3Box.isSelected();
+            String result = install.install(forge.toString(), lwjgl3 ? PROFILE_NAME_LWJGL3 : PROFILE_NAME, 2048, lwjgl3)
+                    .describe();
             JOptionPane.showMessageDialog(null, result, title, JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Install failed:\n" + e.getMessage(), title, JOptionPane.ERROR_MESSAGE);
@@ -144,6 +154,7 @@ public final class Installer {
                       --dir <path>      the launcher's game directory (default: %s)
                       --forge <id>      the Forge version to build on (default: newest 1.8.9 Forge found)
                       --memory <MB>     maximum heap for the profile (default: 2048)
+                      --lwjgl3          run on LWJGL 3 (needed on Apple silicon); a separate profile
                   java -jar lol.trq.lazarus.jar prism         print a Prism Launcher / MultiMC component
                   java -jar lol.trq.lazarus.jar version
                 """.formatted(version(), VanillaInstall.defaultMinecraftDir());
