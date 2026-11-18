@@ -44,6 +44,8 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // Fields writes static finals through Unsafe; on Java 22+ that warns unless allowed.
+    jvmArgs '--sun-misc-unsafe-memory-access=allow'
 }
 
 tasks.named('jar') {
