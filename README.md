@@ -58,6 +58,10 @@ Three pieces, all in the one jar:
   path, Lazarus relaunches the JVM once with everything corrected. A launcher only has to set the main class and add
   the jar.
 
+Lazarus also closes **Log4Shell** in the Log4j 2.0-beta9 that Minecraft 1.8.9 ships: messages are never interpolated
+and JNDI lookups resolve to nothing. The smoke test logs a real exploit string on every CI run and checks nothing
+happens.
+
 The jar bundles ASM 9 and relocated copies of Apache Commons Compress and Gson; see [NOTICE](NOTICE.md).
 
 ## Troubleshooting

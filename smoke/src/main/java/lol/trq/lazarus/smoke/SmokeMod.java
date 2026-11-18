@@ -62,6 +62,7 @@ public class SmokeMod {
         switch (stage) {
             case MENU:
                 if (++ticks >= MENU_TICKS) {
+                    log4shellProbe();
                     report("menu");
                     if (WORLD) {
                         stage = Stage.LOADING_WORLD;
@@ -96,6 +97,29 @@ public class SmokeMod {
         }
         if (!Boolean.getBoolean("lazarus.smoke.stay")) {
             FMLCommonHandler.instance().exitJava(0, false);
+        }
+    }
+
+    /**
+     * Logs a Log4Shell payload that points at a local listener and reports whether Log4j connected to it, and whether
+     * a harmless {@code sys} lookup was expanded in the message.
+     */
+    private static void log4shellProbe() {
+        try (java.net.ServerSocket listener =
+                new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            listener.setSoTimeout(3000);
+            org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger("LazarusProbe");
+            log.info("LAZARUS-PROBE sys=${sys:java.vendor} jndi=${jndi:ldap://127.0.0.1:" + listener.getLocalPort()
+                    + "/x}");
+            boolean connected;
+            try (java.net.Socket ignored = listener.accept()) {
+                connected = true;
+            } catch (java.net.SocketTimeoutException e) {
+                connected = false;
+            }
+            System.out.println("LAZARUS-LOG4SHELL jndiConnected=" + connected);
+        } catch (java.io.IOException e) {
+            System.out.println("LAZARUS-LOG4SHELL probe failed: " + e);
         }
     }
 

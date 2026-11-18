@@ -57,3 +57,5 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew :harness:runLazarus${{ matrix.java }} -Pmixin -Ptimeout=900 | tee boot.log
           grep -q "LAZARUS-SMOKE OK at=menu java=${{ matrix.java }}" boot.log
           grep -q "LAZARUS-MIXIN OK" boot.log
+          grep -q 'LAZARUS-PROBE sys=${sys:java.vendor}' boot.log
+          grep -q "LAZARUS-LOG4SHELL jndiConnected=false" boot.log

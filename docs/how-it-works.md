@@ -64,6 +64,8 @@ looks. Each patch only touches the classes it names.
 | `enum-helper-setup`, `enum-helper-field-writes` | `EnumHelper` | same | Same stand-in; `static final` writes through `Unsafe`, enum constants through `MethodHandles` |
 | `no-security-manager` | `FMLTweaker` | `System.setSecurityManager` off by default since 18, removed in 24 | Skip it; FML's exit transformer still stops mods from calling `System.exit` |
 | `system-class-path` | `CoreModManager` | the application class loader is not a `URLClassLoader` | Append tweaker jars with `Instrumentation.appendToSystemClassLoaderSearch` |
+| `log4shell-message-lookups` | Log4j `MessagePatternConverter` | Log4j 2.0-beta9 to 2.14.1 expand `${...}` in logged messages (Log4Shell, CVE-2021-44228/45046/45105) | Write messages without interpolation, as Log4j 2.15+ does |
+| `log4shell-jndi` | Log4j `JndiLookup` | same | Every `jndi` lookup resolves to nothing |
 | `mixin-class-bytes` | Mixin 0.7's `MixinServiceLaunchWrapper` (any relocation) | same | Use `ClassLoader.getResourceAsStream`, which it was all along |
 
 ### The reflection stand-in

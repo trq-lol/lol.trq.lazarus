@@ -198,6 +198,26 @@ class PatchesTest {
     }
 
     @Test
+    void nullReturnSkipsTheBody() throws Exception {
+        String name = "test/Lookup";
+        byte[] bytes = Bytecode.staticMethod(
+                name, "java/lang/Object", "lookup", "(Ljava/lang/String;)Ljava/lang/String;", mv -> {
+                    mv.visitVarInsn(Opcodes.ALOAD, 0);
+                    mv.visitInsn(Opcodes.ARETURN);
+                });
+        byte[] patched = new NullReturnPatch("t", name, "lookup").apply(name, bytes);
+        Method lookup = new Bytecode.Loader().define(name, patched).getMethod("lookup", String.class);
+        assertNull(lookup.invoke(null, "ldap://example/x"));
+    }
+
+    @Test
+    void log4shellPatchesTargetLog4j() {
+        assertTrue(Patches.all().stream()
+                .anyMatch(p -> p.matches("org/apache/logging/log4j/core/pattern/MessagePatternConverter")));
+        assertTrue(Patches.all().stream().anyMatch(p -> p.matches("org/apache/logging/log4j/core/lookup/JndiLookup")));
+    }
+
+    @Test
     void remapRewritesTypeReferences() {
         String name = "test/UsesPack200";
         byte[] bytes = Bytecode.staticMethod(name, "java/lang/Object", "f", "()Ljava/lang/Object;", mv -> {
