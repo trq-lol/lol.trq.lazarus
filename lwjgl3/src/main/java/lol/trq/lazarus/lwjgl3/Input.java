@@ -62,7 +62,7 @@ public final class Input {
         glfwSetCursorEnterCallback(window, (w, entered) -> insideWindow = entered);
     }
 
-    private static synchronized void onKey(int glfwKey, int action) {
+    static synchronized void onKey(int glfwKey, int action) {
         int key = KeyCodes.toLwjgl2(glfwKey);
         boolean down = action != GLFW_RELEASE;
         boolean repeat = action == GLFW_REPEAT;
@@ -76,7 +76,7 @@ public final class Input {
     }
 
     /** Attaches a typed character to the key press that produced it, as LWJGL 2 reported them together. */
-    private static synchronized void onChar(int codepoint) {
+    static synchronized void onChar(int codepoint) {
         char[] chars = Character.toChars(codepoint);
         KeyEvent last = KEYS.peekLast();
         int start = 0;
@@ -89,7 +89,7 @@ public final class Input {
         }
     }
 
-    private static synchronized void onButton(int button, boolean down) {
+    static synchronized void onButton(int button, boolean down) {
         if (button >= 0 && button < BUTTON_DOWN.length) {
             BUTTON_DOWN[button] = down;
         }
@@ -116,7 +116,7 @@ public final class Input {
         MOUSE.add(new MouseEvent(-1, false, newX, newY, dx, dy, 0, System.nanoTime()));
     }
 
-    private static synchronized void onScroll(double dy) {
+    static synchronized void onScroll(double dy) {
         int wheel = (int) Math.round(dy * 120);
         accumWheel += wheel;
         MOUSE.add(new MouseEvent(-1, false, mouseX, mouseY, 0, 0, wheel, System.nanoTime()));
