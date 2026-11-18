@@ -12,6 +12,7 @@
 - [docs/launchers.md](docs/launchers.md): official launcher, Prism/MultiMC, custom launchers
 - [docs/troubleshooting.md](docs/troubleshooting.md): errors and fixes
 - [docs/security.md](docs/security.md): Log4Shell, Java4Shell, what is and is not covered
+- [docs/lwjgl3.md](docs/lwjgl3.md): optional LWJGL 3, the API layer, what is tested
 - [CLAUDE.md](CLAUDE.md): mental model, patterns that matter, traps
 - [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [NOTICE](NOTICE.md)
 
@@ -25,6 +26,8 @@
 - [Fields](runtime/src/main/java/lol/trq/lazarus/compat/Fields.java): `static final` writes
 - [ElfVersions](runtime/src/main/java/lol/trq/lazarus/compat/ElfVersions.java): LWJGL Linux natives fix
 - [VanillaInstall](runtime/src/main/java/lol/trq/lazarus/install/VanillaInstall.java): official launcher install
+- [Display](lwjgl3/src/main/java/org/lwjgl/opengl/Display.java), [Window](lwjgl3/src/main/java/lol/trq/lazarus/lwjgl3/Window.java), [Input](lwjgl3/src/main/java/lol/trq/lazarus/lwjgl3/Input.java): LWJGL 2 on GLFW
+- [Lwjgl3Patches](runtime/src/main/java/lol/trq/lazarus/patch/Lwjgl3Patches.java): LWJGL 2 aliases on LWJGL 3
 - [libraries.json](runtime/src/main/resources/lol/trq/lazarus/libraries.json): launch profile contract
 
 ## Examples

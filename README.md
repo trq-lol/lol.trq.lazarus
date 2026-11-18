@@ -28,7 +28,11 @@ You need Forge 1.8.9 (11.15.1.2318) installed first, with its own installer.
 4. In the launcher, pick the **Forge 1.8.9 (Lazarus)** installation and play. The launcher downloads the Java 21
    runtime it asks for.
 
-From a terminal: `java -jar lol.trq.lazarus-<version>.jar install [--dir <.minecraft>] [--forge <id>]`.
+From a terminal: `java -jar lol.trq.lazarus-<version>.jar install [--dir <.minecraft>] [--forge <id>] [--lwjgl3]`.
+
+**LWJGL 3** (tick the box, or `--lwjgl3`) installs a second profile that runs the game on LWJGL 3 instead of 1.8.9's
+LWJGL 2: native Apple silicon, GLFW windowing and input, correct high-DPI scaling. It is selected by default on
+Apple silicon Macs. See [docs/lwjgl3.md](docs/lwjgl3.md).
 
 The installer only adds files: a library, a new version that inherits your Forge version, and a profile. It backs up
 `launcher_profiles.json` first. Your plain Forge installation keeps working on Java 8.
@@ -83,6 +87,7 @@ Gradle provisions the JDKs it needs. The build has four projects:
 | Project | What it is |
 |---------|------------|
 | `runtime` | The shipped jar: entrypoint, agent, patches, installer |
+| `lwjgl3` | The LWJGL 2 API on LWJGL 3, bundled inside the runtime jar |
 | `harness` | A development launcher that downloads Minecraft 1.8.9 and Forge and boots them on any JDK |
 | `smoke` | A test mod that reports at the main menu (and optionally in a world), then exits |
 | `smoke-mixin` | A test mod that bundles Mixin 0.7.11 and injects into the main menu |
@@ -94,6 +99,8 @@ Boot the game through Lazarus. The window opens muted and closes itself.
 ./gradlew :harness:runLazarus21 -Poptifine=/path/OptiFine.jar  # with OptiFine (bring your own copy)
 ./gradlew :harness:runBare25                                   # worst case: no agent, stock class path
 ./gradlew :harness:runStock8                                   # stock LaunchWrapper on Java 8, for comparison
+./gradlew :harness:runLwjgl3_25 -Pmixin                        # on LWJGL 3
+./gradlew :harness:runBareLwjgl3_25                            # LWJGL 3, worst case: stock class path, no agent
 ```
 
 Add `-PjvmArgs="-Dlazarus.smoke.world=true -Dlazarus.smoke.screenshot=true"` to also play in a world and save a

@@ -31,5 +31,8 @@ that bundle Mixin 0.7.
 - LWJGL 2 Linux natives load on JDKs that no longer version `libjawt.so` symbols.
 - An installer for the official Minecraft Launcher (`java -jar`, window or command line), and a Prism Launcher /
   MultiMC component (`java -jar … prism`).
+- Optional LWJGL 3: an LWJGL 2 API layer on GLFW, OpenGL and OpenAL (`lol.trq.lazarus-lwjgl3`, bundled), LWJGL 2
+  method aliases added to LWJGL 3 classes by the agent, bootstrap support (LWJGL 2 removed from the class path,
+  `-XstartOnFirstThread` on macOS) and `install --lwjgl3`. See `docs/lwjgl3.md`.
 - A development harness that boots real Forge 1.8.9 on any JDK, smoke and Mixin test mods, and CI that boots the
   game on Java 17, 21 and 25.
