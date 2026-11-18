@@ -16,6 +16,7 @@ public final class Patches {
     /** {@return every patch} */
     public static List<ClassPatch> all() {
         return List.of(
+                mixinModernAsm(),
                 asmApiLevel(),
                 pack200(),
                 lenientAsmTypes(),
@@ -27,7 +28,8 @@ public final class Patches {
                 enumHelperSetup(),
                 enumHelperFieldWrites(),
                 securityManager(),
-                systemClassPath());
+                systemClassPath(),
+                mixinClassBytes());
     }
 
     /**
@@ -177,5 +179,25 @@ public final class Patches {
                 "(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
                 HOOKS,
                 "invoke");
+    }
+
+    /**
+     * Mixin 0.7's LaunchWrapper service casts LaunchWrapper's class loader to {@code URLClassLoader} only to call
+     * {@code getResourceAsStream}, which every {@code ClassLoader} has. Matched by suffix to cover relocated copies.
+     */
+    static ClassPatch mixinClassBytes() {
+        String service = "org/spongepowered/asm/service/mojang/MixinServiceLaunchWrapper";
+        return new SuffixPatch(
+                new RemapPatch(
+                        "mixin-class-bytes", Set.of(), Map.of("java/net/URLClassLoader", "java/lang/ClassLoader")),
+                service);
+    }
+
+    /**
+     * Mixin 0.7 reads classes with its own relocated ASM 5, which rejects Java 9+ class files such as the JDK's. Point
+     * it at ASM 9. Runs before {@link #asmApiLevel()} so the rewritten visitors get their api level raised too.
+     */
+    static ClassPatch mixinModernAsm() {
+        return new RelocatedAsmPatch("mixin-modern-asm", "org/spongepowered/", "org/spongepowered/asm/lib/");
     }
 }

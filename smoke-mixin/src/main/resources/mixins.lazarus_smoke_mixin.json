@@ -1,0 +1,6 @@
+{
+  "required": true,
+  "package": "lol.trq.lazarus.smokemixin.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": ["MainMenuMixin"]
+}

@@ -1,6 +1,7 @@
 // Development launcher. Not published.
 evaluationDependsOn(':runtime')
 evaluationDependsOn(':smoke')
+evaluationDependsOn(':smoke-mixin')
 dependencies {
     implementation 'com.google.code.gson:gson:2.13.2'
 }
@@ -11,16 +12,18 @@ def javaFor = { int version ->
 
 def runtimeJar = project(':runtime').tasks.named('shadowJar')
 def smokeJar = project(':smoke').tasks.named('jar')
+def smokeMixinJar = project(':smoke-mixin').tasks.named('jar')
 
 def registerRun = { String name, String mode, int javaVersion ->
     tasks.register(name, JavaExec) {
         group = 'lazarus'
         description = "Boots Forge 1.8.9 ($mode) on Java $javaVersion and exits at the main menu."
-        dependsOn runtimeJar, smokeJar
+        dependsOn runtimeJar, smokeJar, smokeMixinJar
         classpath = sourceSets.main.runtimeClasspath
         mainClass = 'lol.trq.lazarus.harness.DevLaunch'
         def launcher = javaFor(javaVersion)
         def mods = [smokeJar.get().archiveFile.get().asFile.absolutePath]
+        if (project.hasProperty('mixin')) mods << smokeMixinJar.get().archiveFile.get().asFile.absolutePath
         if (project.hasProperty('optifine')) mods << file(project.property('optifine')).absolutePath
         doFirst {
             args = [

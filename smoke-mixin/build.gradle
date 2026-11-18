@@ -1,0 +1,35 @@
+// Test mod that bundles Mixin the way most 1.8.9 mods do: Mixin 0.7.11 shaded in, MixinTweaker in the manifest.
+repositories {
+    maven {
+        url = 'https://repo.spongepowered.org/maven/'
+        content { includeGroup 'org.spongepowered' }
+    }
+}
+
+configurations {
+    bundle
+    compileOnly.extendsFrom bundle
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+    options.compilerArgs << '-Xlint:-options'
+}
+
+dependencies {
+    bundle('org.spongepowered:mixin:0.7.11-SNAPSHOT') { transitive = false }
+}
+
+tasks.named('jar') {
+    from { configurations.bundle.collect { zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+            'TweakClass': 'org.spongepowered.asm.launch.MixinTweaker',
+            'MixinConfigs': 'mixins.lazarus_smoke_mixin.json',
+            'ForceLoadAsMod': 'true',
+            'TweakOrder': '0',
+        )
+    }
+}

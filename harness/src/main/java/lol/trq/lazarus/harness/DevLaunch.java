@@ -38,7 +38,6 @@ public final class DevLaunch {
     static final String MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
     static final String FORGE_MAVEN = "https://maven.minecraftforge.net/";
     static final String MOJANG_LIBS = "https://libraries.minecraft.net/";
-    static final String ASM_VERSION = "9.11.1";
 
     private final HttpClient http = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -68,7 +67,7 @@ public final class DevLaunch {
         DevLaunch launch = new DevLaunch(cache);
         List<Path> classpath = new ArrayList<>();
         Path natives = launch.vanilla(classpath);
-        launch.forge(classpath, mode.equals("lazarus"));
+        launch.forge(classpath, mode.equals("lazarus") ? lazarusLibraries(Path.of(require(opts, "runtime"))) : null);
         if (mode.equals("lazarus")) {
             classpath.add(0, Path.of(require(opts, "runtime")).toAbsolutePath());
         }
@@ -178,7 +177,11 @@ public final class DevLaunch {
         return natives;
     }
 
-    private void forge(List<Path> classpath, boolean modernAsm) throws IOException, InterruptedException {
+    private void forge(List<Path> classpath, JsonObject lazarus) throws IOException, InterruptedException {
+        List<String> removed = new ArrayList<>();
+        if (lazarus != null) {
+            lazarus.getAsJsonArray("remove").forEach(e -> removed.add(e.getAsString()));
+        }
         String path = "net/minecraftforge/forge/" + FORGE + "/forge-" + FORGE + "-universal.jar";
         Path universal = fetch(FORGE_MAVEN + path, cache.resolve("libraries/" + path), true);
         JsonObject profile;
@@ -197,11 +200,7 @@ public final class DevLaunch {
             if (lib.has("clientreq") && !lib.get("clientreq").getAsBoolean()) {
                 continue;
             }
-            if (modernAsm && name.startsWith("org.ow2.asm:asm-all:")) {
-                for (String module : List.of("asm", "asm-tree", "asm-commons", "asm-util", "asm-analysis")) {
-                    forgeLibs.add(
-                            maven("https://repo1.maven.org/maven2/", "org.ow2.asm:" + module + ":" + ASM_VERSION));
-                }
+            if (removed.stream().anyMatch(r -> name.startsWith(r + ":"))) {
                 continue;
             }
             if (alreadyPresent(classpath, name)) {
@@ -210,8 +209,24 @@ public final class DevLaunch {
             String base = lib.has("url") ? lib.get("url").getAsString() : MOJANG_LIBS;
             forgeLibs.add(mavenWithFallback(base, name));
         }
+        if (lazarus != null) {
+            for (JsonElement el : lazarus.getAsJsonArray("add")) {
+                JsonObject lib = el.getAsJsonObject();
+                forgeLibs.add(
+                        maven(lib.get("url").getAsString(), lib.get("name").getAsString()));
+            }
+        }
         classpath.addAll(0, forgeLibs);
         classpath.add(0, universal);
+    }
+
+    /** Reads {@code libraries.json} from the Lazarus runtime jar. */
+    static JsonObject lazarusLibraries(Path runtime) throws IOException {
+        try (ZipFile zip = new ZipFile(runtime.toFile())) {
+            try (InputStream in = zip.getInputStream(zip.getEntry("lol/trq/lazarus/libraries.json"))) {
+                return JsonParser.parseString(new String(in.readAllBytes())).getAsJsonObject();
+            }
+        }
     }
 
     private static boolean alreadyPresent(List<Path> classpath, String coordinate) {
