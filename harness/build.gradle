@@ -1,0 +1,43 @@
+// Development launcher. Not published.
+evaluationDependsOn(':runtime')
+evaluationDependsOn(':smoke')
+dependencies {
+    implementation 'com.google.code.gson:gson:2.13.2'
+}
+
+def javaFor = { int version ->
+    javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(version) }
+}
+
+def runtimeJar = project(':runtime').tasks.named('shadowJar')
+def smokeJar = project(':smoke').tasks.named('jar')
+
+def registerRun = { String name, String mode, int javaVersion ->
+    tasks.register(name, JavaExec) {
+        group = 'lazarus'
+        description = "Boots Forge 1.8.9 ($mode) on Java $javaVersion and exits at the main menu."
+        dependsOn runtimeJar, smokeJar
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'lol.trq.lazarus.harness.DevLaunch'
+        def launcher = javaFor(javaVersion)
+        def mods = [smokeJar.get().archiveFile.get().asFile.absolutePath]
+        if (project.hasProperty('optifine')) mods << file(project.property('optifine')).absolutePath
+        doFirst {
+            args = [
+                "java=${launcher.get().executablePath.asFile.absolutePath}",
+                "mode=$mode",
+                "runtime=${runtimeJar.get().archiveFile.get().asFile.absolutePath}",
+                "mods=${mods.join(File.pathSeparator)}",
+                "cache=${rootProject.layout.projectDirectory.dir('.harness-cache').asFile.absolutePath}",
+                "gameDir=${layout.buildDirectory.dir("run/$name").get().asFile.absolutePath}",
+                "jvmArgs=${project.findProperty('jvmArgs') ?: ''}",
+                "timeout=${project.findProperty('timeout') ?: '300'}",
+            ]
+        }
+    }
+}
+
+registerRun('runStock8', 'stock', 8)
+registerRun('runLazarus17', 'lazarus', 17)
+registerRun('runLazarus21', 'lazarus', 21)
+registerRun('runLazarus25', 'lazarus', 25)
