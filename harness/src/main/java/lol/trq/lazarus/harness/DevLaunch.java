@@ -144,7 +144,7 @@ public final class DevLaunch {
         System.exit(process.exitValue());
     }
 
-    private Path vanilla(List<Path> classpath) throws IOException, InterruptedException {
+    Path vanilla(List<Path> classpath) throws IOException, InterruptedException {
         JsonObject manifest = json(fetch(MANIFEST, cache.resolve("version_manifest_v2.json"), false));
         String url = null;
         for (JsonElement v : manifest.getAsJsonArray("versions")) {

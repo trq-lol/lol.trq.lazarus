@@ -24,6 +24,8 @@ configurations {
 dependencies {
     // Pack200 left the JDK in 14; FML needs it to read its binary patches. Shaded and relocated.
     shade 'org.apache.commons:commons-compress:1.28.0'
+    // JSON for the installer, which edits the launcher's files.
+    shade 'com.google.code.gson:gson:2.15.0'
     // ASM 9, bundled unrelocated: it replaces Forge's asm-all 5 for FML, Mixin and every legacy ASM user.
     asm 'org.ow2.asm:asm:9.11.1'
     asm 'org.ow2.asm:asm-tree:9.11.1'
@@ -55,6 +57,8 @@ tasks.named('shadowJar') {
     relocate 'org.apache.commons.compress', 'lol.trq.lazarus.shadow.compress'
     relocate 'org.apache.commons.io', 'lol.trq.lazarus.shadow.io'
     relocate 'org.apache.commons.lang3', 'lol.trq.lazarus.shadow.lang3'
+    relocate 'com.google.gson', 'lol.trq.lazarus.shadow.gson'
+    relocate 'com.google.errorprone', 'lol.trq.lazarus.shadow.errorprone'
     exclude 'module-info.class', 'META-INF/versions/**', 'META-INF/maven/**'
     manifest {
         attributes(

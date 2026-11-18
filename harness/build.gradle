@@ -46,3 +46,25 @@ registerRun('runLazarus21', 'lazarus', 21)
 registerRun('runLazarus25', 'lazarus', 25)
 registerRun('runBare21', 'bare', 21)
 registerRun('runBare25', 'bare', 25)
+
+// Launches a profile written by the installer, the way the official launcher does. -PmcDir=... -Pprofile=...
+tasks.register('runProfile', JavaExec) {
+    group = 'lazarus'
+    description = 'Launches an installed Lazarus profile from a launcher directory, as the official launcher would.'
+    dependsOn smokeJar
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'lol.trq.lazarus.harness.ProfileLaunch'
+    def launcher = javaFor((project.findProperty('javaVersion') ?: '21') as int)
+    doFirst {
+        args = [
+            "java=${launcher.get().executablePath.asFile.absolutePath}",
+            "mcDir=${project.property('mcDir')}",
+            "profile=${project.property('profile')}",
+            "cache=${rootProject.layout.projectDirectory.dir('.harness-cache').asFile.absolutePath}",
+            "gameDir=${layout.buildDirectory.dir('run/runProfile').get().asFile.absolutePath}",
+            "mods=${smokeJar.get().archiveFile.get().asFile.absolutePath}",
+            "jvmArgs=${project.findProperty('jvmArgs') ?: ''}",
+            "timeout=${project.findProperty('timeout') ?: '300'}",
+        ]
+    }
+}
