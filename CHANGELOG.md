@@ -33,6 +33,8 @@ that bundle Mixin 0.7.
   MultiMC component (`java -jar … prism`).
 - Optional LWJGL 3: an LWJGL 2 API layer on GLFW, OpenGL and OpenAL (`lol.trq.lazarus-lwjgl3`, bundled), LWJGL 2
   method aliases added to LWJGL 3 classes by the agent, bootstrap support (LWJGL 2 removed from the class path,
-  `-XstartOnFirstThread` on macOS) and `install --lwjgl3`. See `docs/lwjgl3.md`.
+  `-XstartOnFirstThread` and headless AWT on macOS), Minecraft's clipboard on GLFW, and `install --lwjgl3`. Runs
+  on Apple silicon. See `docs/lwjgl3.md`.
+- `-Dlazarus.debug.input=true` traces mouse grabs, focus and movement.
 - A development harness that boots real Forge 1.8.9 on any JDK, smoke and Mixin test mods, and CI that boots the
   game on Java 17, 21 and 25.

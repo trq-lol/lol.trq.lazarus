@@ -65,7 +65,7 @@ jobs:
 
   # Apple silicon, LWJGL 3. Experimental: hosted macOS runners may not offer a usable OpenGL context.
   boot-macos:
-    runs-on: macos-14
+    runs-on: macos-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7

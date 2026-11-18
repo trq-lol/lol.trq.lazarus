@@ -64,7 +64,10 @@ LWJGL 3 extracts its own natives from its natives jars; LWJGL 2's natives on `ja
 | Windows: menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
 | Windows: OptiFine, world, splash screen | | | ✔ |
 | Windows: installed launcher profile, stock class path, no agent | | ✔ | ✔ |
-| Linux CI (Xvfb, software OpenGL): menu, Mixin 0.7 mod | see CI | see CI | see CI |
-| macOS Apple silicon | not yet | not yet | not yet |
+| Linux CI (Xvfb, software OpenGL): menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
+| macOS 26.5, Apple M2: menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
+| macOS: world, Retina screenshot (2x, full window), stock class path with no agent | | | ✔ |
 
-Interactive input (typing, mouse look, full screen toggle) has not yet been verified by hand.
+Played by hand: on Windows (typing, menus, inventory, mouse look) and on macOS with a trackpad (typing, copy and
+paste, menus, mouse look, Cmd-Tab). LWJGL 2 does not start on Apple silicon (`liblwjgl.dylib` has no arm64 build),
+which is what the LWJGL 3 install is for.

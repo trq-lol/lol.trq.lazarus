@@ -37,6 +37,6 @@ Also tested:
 - **Nashorn** (the `javax.script` JavaScript engine) left the JDK in Java 15. Mods that script with it need the
   standalone `org.openjdk.nashorn` library, which uses a different package.
 - **LWJGL 2.9.4 by default**, which runs on Java 17 to 25 on Windows and Linux x64. The optional LWJGL 3 install
-  ([lwjgl3.md](lwjgl3.md)) targets Apple silicon; it has not yet been run on a Mac.
+  ([lwjgl3.md](lwjgl3.md)) runs on Apple silicon (tested on an M2 with macOS 26.5).
 - **Minecraft and Forge versions other than 1.8.9** are not supported.
 - **Servers** are not covered yet. Lazarus targets the client.
