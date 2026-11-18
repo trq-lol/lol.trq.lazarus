@@ -1,66 +1,35 @@
 plugins {
-    id 'java-library'
-    id 'maven-publish'
-    id 'com.diffplug.spotless' version '8.11.0'
+    id 'com.diffplug.spotless' version '8.11.0' apply false
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(25)
-    withSourcesJar()
-}
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'com.diffplug.spotless'
 
-// The runtime boots Minecraft 1.8.9 on Java 17 through 25, so the shipped bytecode targets the oldest of those.
-tasks.withType(JavaCompile).configureEach {
-    options.release = 17
-    options.encoding = 'UTF-8'
-}
+    group = rootProject.group
+    version = rootProject.version
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    testImplementation platform('org.junit:junit-bom:5.11.4')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-test {
-    useJUnitPlatform()
-}
-
-spotless {
     java {
-        palantirJavaFormat('2.91.0').style('PALANTIR')
-        removeUnusedImports()
-        licenseHeader '/* SPDX-License-Identifier: LGPL-3.0-or-later */'
+        toolchain.languageVersion = JavaLanguageVersion.of(25)
     }
-}
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            from components.java
-            pom {
-                name = 'lol.trq.lazarus'
-                description = 'Runs Minecraft Forge 1.8.9 on Java 17 and newer'
-                licenses {
-                    license {
-                        name = 'GNU Lesser General Public License v3.0 or later'
-                        url = 'https://www.gnu.org/licenses/lgpl-3.0.html'
-                    }
-                }
-            }
+    repositories {
+        mavenCentral()
+        maven {
+            url = 'https://libraries.minecraft.net'
+            content { includeGroup 'net.minecraft' }
         }
     }
-    repositories {
-        maven {
-            name = 'GitHubPackages'
-            url = 'https://maven.pkg.github.com/trq-lol/lol.trq.lazarus'
-            credentials {
-                username = System.getenv('GITHUB_ACTOR')
-                password = System.getenv('GITHUB_TOKEN')
-            }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    spotless {
+        java {
+            palantirJavaFormat('2.91.0').style('PALANTIR')
+            removeUnusedImports()
+            licenseHeader '/* SPDX-License-Identifier: LGPL-3.0-or-later */'
         }
     }
 }

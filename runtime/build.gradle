@@ -1,0 +1,106 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'com.gradleup.shadow' version '9.6.1'
+}
+
+base.archivesName = 'lol.trq.lazarus'
+
+java {
+    withSourcesJar()
+}
+
+// Lazarus runs inside Minecraft on Java 17 through 25, so it targets the oldest of those.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+configurations {
+    shade
+    implementation.extendsFrom shade
+}
+
+dependencies {
+    // Pack200 left the JDK in 14; FML needs it to read its binary patches. Shaded and relocated.
+    shade 'org.apache.commons:commons-compress:1.28.0'
+    // ASM ships on the game class path (Lazarus replaces asm-debug-all 5 with ASM 9).
+    compileOnly 'org.ow2.asm:asm:9.11.1'
+    compileOnly 'org.ow2.asm:asm-commons:9.11.1'
+    compileOnly 'org.ow2.asm:asm-tree:9.11.1'
+    testImplementation 'org.ow2.asm:asm:9.11.1'
+    testImplementation 'org.ow2.asm:asm-commons:9.11.1'
+    testImplementation 'org.ow2.asm:asm-tree:9.11.1'
+    compileOnly 'net.minecraft:launchwrapper:1.12'
+    compileOnly 'org.apache.logging.log4j:log4j-api:2.0-beta9'
+
+    testImplementation 'net.minecraft:launchwrapper:1.12'
+    testImplementation 'org.apache.logging.log4j:log4j-api:2.0-beta9'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.named('jar') {
+    archiveClassifier = 'thin'
+}
+
+tasks.named('shadowJar') {
+    archiveClassifier = ''
+    configurations = [project.configurations.shade]
+    relocate 'org.apache.commons.compress', 'lol.trq.lazarus.shadow.compress'
+    relocate 'org.apache.commons.io', 'lol.trq.lazarus.shadow.io'
+    relocate 'org.apache.commons.lang3', 'lol.trq.lazarus.shadow.lang3'
+    exclude 'module-info.class', 'META-INF/versions/**', 'META-INF/maven/**'
+    manifest {
+        attributes(
+            'Premain-Class': 'lol.trq.lazarus.agent.LazarusAgent',
+            'Agent-Class': 'lol.trq.lazarus.agent.LazarusAgent',
+            'Implementation-Title': 'lol.trq.lazarus',
+            'Implementation-Version': project.version,
+        )
+    }
+}
+
+tasks.named('assemble') { dependsOn 'shadowJar' }
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifactId = 'lol.trq.lazarus'
+            from components.shadow
+            artifact tasks.named('sourcesJar')
+            pom {
+                name = 'lol.trq.lazarus'
+                description = 'Runs Minecraft Forge 1.8.9 on Java 17 and newer'
+                licenses {
+                    license {
+                        name = 'GNU Lesser General Public License v3.0 or later'
+                        url = 'https://www.gnu.org/licenses/lgpl-3.0.html'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = 'https://maven.pkg.github.com/trq-lol/lol.trq.lazarus'
+            credentials {
+                username = System.getenv('GITHUB_ACTOR')
+                password = System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}
+
+// org.objectweb.asm.commons.Remapping*Adapter: ASM 6.2.1 sources under ASM's BSD-3-Clause license, kept verbatim
+// apart from the api level. Spotless must not rewrite their headers.
+spotless {
+    java {
+        targetExclude 'src/main/java/org/objectweb/**'
+    }
+}

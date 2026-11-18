@@ -9,3 +9,6 @@ run/
 
 # planning documents live in a separate repository
 docs/superpowers/
+
+# harness downloads (Minecraft, Forge, libraries)
+.harness-cache/
