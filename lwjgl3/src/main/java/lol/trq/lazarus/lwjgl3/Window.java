@@ -109,6 +109,9 @@ public final class Window {
         glfwSetWindowFocusCallback(handle, (w, f) -> {
             focused = f;
             InputTrace.focus(f);
+            if (f) {
+                org.lwjgl.input.Mouse.reapplyCursor();
+            }
             if (!f) {
                 Input.clear();
             }

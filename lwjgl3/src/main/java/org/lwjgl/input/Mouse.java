@@ -191,6 +191,21 @@ public final class Mouse {
     }
 
     /**
+     * Forces the cursor mode to match the grab state. Called when the window regains focus: macOS only applies a
+     * cursor change to the focused window, and GLFW skips a mode it believes is already set, so a release that
+     * happened while another app had focus (the game pausing for an overlay) would leave the cursor hidden.
+     */
+    public static void reapplyCursor() {
+        long window = Window.handle();
+        if (window == 0) {
+            return;
+        }
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+        glfwSetInputMode(window, GLFW_CURSOR, grabbed ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+        Input.resetCursorDelta();
+    }
+
+    /**
      * Moves the cursor.
      *
      * @param x x in framebuffer pixels
