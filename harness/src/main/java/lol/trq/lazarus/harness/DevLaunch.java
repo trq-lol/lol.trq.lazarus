@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 package lol.trq.lazarus.harness;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -67,9 +68,13 @@ public final class DevLaunch {
         DevLaunch launch = new DevLaunch(cache);
         List<Path> classpath = new ArrayList<>();
         Path natives = launch.vanilla(classpath);
+        boolean lazarus = !mode.equals("stock");
         launch.forge(classpath, mode.equals("lazarus") ? lazarusLibraries(Path.of(require(opts, "runtime"))) : null);
         if (mode.equals("lazarus")) {
             classpath.add(0, Path.of(require(opts, "runtime")).toAbsolutePath());
+        } else if (mode.equals("bare")) {
+            // Worst case for the bootstrap: stock Forge class path with asm-all, Lazarus last, no agent, no flags.
+            classpath.add(Path.of(require(opts, "runtime")).toAbsolutePath());
         }
         for (String extra : opts.getOrDefault("extra", "").split(File.pathSeparator)) {
             if (!extra.isBlank()) {
@@ -100,6 +105,10 @@ public final class DevLaunch {
         command.add("-Dfml.ignorePatchDiscrepancies=true");
         if (mode.equals("lazarus")) {
             command.add("-javaagent:" + Path.of(require(opts, "runtime")).toAbsolutePath());
+            command.addAll(List.of(
+                    "-XX:+IgnoreUnrecognizedVMOptions",
+                    "--enable-native-access=ALL-UNNAMED",
+                    "--sun-misc-unsafe-memory-access=allow"));
             command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
                     .filter(s -> !s.isBlank())
                     .toList());
@@ -107,7 +116,7 @@ public final class DevLaunch {
         command.add("-cp");
         command.add(String.join(
                 File.pathSeparator, classpath.stream().map(Path::toString).toList()));
-        command.add(mode.equals("lazarus") ? "lol.trq.lazarus.launch.Lazarus" : "net.minecraft.launchwrapper.Launch");
+        command.add(lazarus ? "lol.trq.lazarus.launch.Lazarus" : "net.minecraft.launchwrapper.Launch");
         command.addAll(List.of(
                 "--username", "Lazarus",
                 "--version", FORGE,
@@ -210,7 +219,8 @@ public final class DevLaunch {
             forgeLibs.add(mavenWithFallback(base, name));
         }
         if (lazarus != null) {
-            for (JsonElement el : lazarus.getAsJsonArray("add")) {
+            JsonArray add = lazarus.has("add") ? lazarus.getAsJsonArray("add") : new JsonArray();
+            for (JsonElement el : add) {
                 JsonObject lib = el.getAsJsonObject();
                 forgeLibs.add(
                         maven(lib.get("url").getAsString(), lib.get("name").getAsString()));

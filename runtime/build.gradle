@@ -17,19 +17,19 @@ tasks.withType(JavaCompile).configureEach {
 
 configurations {
     shade
-    implementation.extendsFrom shade
+    asm
+    implementation.extendsFrom shade, asm
 }
 
 dependencies {
     // Pack200 left the JDK in 14; FML needs it to read its binary patches. Shaded and relocated.
     shade 'org.apache.commons:commons-compress:1.28.0'
-    // ASM ships on the game class path (Lazarus replaces asm-debug-all 5 with ASM 9).
-    compileOnly 'org.ow2.asm:asm:9.11.1'
-    compileOnly 'org.ow2.asm:asm-commons:9.11.1'
-    compileOnly 'org.ow2.asm:asm-tree:9.11.1'
-    testImplementation 'org.ow2.asm:asm:9.11.1'
-    testImplementation 'org.ow2.asm:asm-commons:9.11.1'
-    testImplementation 'org.ow2.asm:asm-tree:9.11.1'
+    // ASM 9, bundled unrelocated: it replaces Forge's asm-all 5 for FML, Mixin and every legacy ASM user.
+    asm 'org.ow2.asm:asm:9.11.1'
+    asm 'org.ow2.asm:asm-tree:9.11.1'
+    asm 'org.ow2.asm:asm-commons:9.11.1'
+    asm 'org.ow2.asm:asm-util:9.11.1'
+    asm 'org.ow2.asm:asm-analysis:9.11.1'
     compileOnly 'net.minecraft:launchwrapper:1.12'
     compileOnly 'org.apache.logging.log4j:log4j-api:2.0-beta9'
 
@@ -50,13 +50,15 @@ tasks.named('jar') {
 
 tasks.named('shadowJar') {
     archiveClassifier = ''
-    configurations = [project.configurations.shade]
+    configurations = [project.configurations.shade, project.configurations.asm]
+    // Only the Commons libraries are relocated; ASM must keep its package, which is what FML links against.
     relocate 'org.apache.commons.compress', 'lol.trq.lazarus.shadow.compress'
     relocate 'org.apache.commons.io', 'lol.trq.lazarus.shadow.io'
     relocate 'org.apache.commons.lang3', 'lol.trq.lazarus.shadow.lang3'
     exclude 'module-info.class', 'META-INF/versions/**', 'META-INF/maven/**'
     manifest {
         attributes(
+            'Main-Class': 'lol.trq.lazarus.install.Installer',
             'Premain-Class': 'lol.trq.lazarus.agent.LazarusAgent',
             'Agent-Class': 'lol.trq.lazarus.agent.LazarusAgent',
             'Implementation-Title': 'lol.trq.lazarus',

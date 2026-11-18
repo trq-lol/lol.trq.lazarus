@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import lol.trq.lazarus.agent.LazarusAgent;
 import net.minecraft.launchwrapper.ITweaker;
@@ -56,6 +57,11 @@ public final class Lazarus {
      * @throws Throwable whatever the tweaker chain or the game's main method throws
      */
     public static void main(String[] args) throws Throwable {
+        Optional<Integer> child = Bootstrap.relaunchIfNeeded(args);
+        if (child.isPresent()) {
+            System.exit(child.get());
+            return;
+        }
         if (!LazarusAgent.installed()) {
             throw new IllegalStateException("the Lazarus agent is not installed; add -javaagent:<lazarus jar>");
         }
