@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lol.trq.lazarus.agent.LazarusAgent;
+import lol.trq.lazarus.compat.LinuxNatives;
 import net.minecraft.launchwrapper.ITweaker;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader;
@@ -65,6 +66,7 @@ public final class Lazarus {
         if (!LazarusAgent.installed()) {
             throw new IllegalStateException("the Lazarus agent is not installed; add -javaagent:<lazarus jar>");
         }
+        LinuxNatives.prepare();
         LaunchArguments parsed = LaunchArguments.parse(args);
         LaunchClassLoader loader = createClassLoader(Classpath.current());
         Launch.classLoader = loader;
