@@ -67,7 +67,11 @@ public final class DevLaunch {
 
         DevLaunch launch = new DevLaunch(cache);
         List<Path> classpath = new ArrayList<>();
-        Path natives = launch.vanilla(classpath);
+        boolean useLwjgl3 = Boolean.parseBoolean(opts.getOrDefault("lwjgl3", "false"));
+        Path natives = launch.vanilla(classpath, useLwjgl3);
+        if (useLwjgl3) {
+            classpath.add(Path.of(require(opts, "lwjgl3Jar")).toAbsolutePath());
+        }
         boolean lazarus = !mode.equals("stock");
         launch.forge(classpath, mode.equals("lazarus") ? lazarusLibraries(Path.of(require(opts, "runtime"))) : null);
         if (mode.equals("lazarus")) {
@@ -146,6 +150,19 @@ public final class DevLaunch {
     }
 
     Path vanilla(List<Path> classpath) throws IOException, InterruptedException {
+        return vanilla(classpath, false);
+    }
+
+    /** LWJGL 3 version used when a launch replaces LWJGL 2. */
+    static final String LWJGL3 = "3.4.3";
+
+    /**
+     * Adds Minecraft's libraries and client jar to the class path and extracts natives.
+     *
+     * @param lwjgl3 whether to replace LWJGL 2 (its jar and natives) with LWJGL 3
+     * @return the natives directory
+     */
+    Path vanilla(List<Path> classpath, boolean lwjgl3) throws IOException, InterruptedException {
         JsonObject manifest = json(fetch(MANIFEST, cache.resolve("version_manifest_v2.json"), false));
         String url = null;
         for (JsonElement v : manifest.getAsJsonArray("versions")) {
@@ -154,11 +171,17 @@ public final class DevLaunch {
             }
         }
         JsonObject version = json(fetch(url, cache.resolve("versions/" + MC + ".json"), true));
-        Path natives = cache.resolve("natives/" + MC);
+        Path natives = cache.resolve("natives/" + MC + (lwjgl3 ? "-lwjgl3" : ""));
         Files.createDirectories(natives);
         for (JsonElement el : version.getAsJsonArray("libraries")) {
             JsonObject lib = el.getAsJsonObject();
             if (!allowed(lib)) {
+                continue;
+            }
+            String libName = lib.get("name").getAsString();
+            if (lwjgl3
+                    && (libName.startsWith("org.lwjgl.lwjgl:lwjgl:")
+                            || libName.startsWith("org.lwjgl.lwjgl:lwjgl-platform:"))) {
                 continue;
             }
             JsonObject downloads = lib.getAsJsonObject("downloads");
@@ -180,6 +203,19 @@ public final class DevLaunch {
                         cache.resolve("libraries/" + art.get("path").getAsString()),
                         true);
                 extractNatives(jar, natives);
+            }
+        }
+        if (lwjgl3) {
+            String classifier =
+                    switch (osKey()) {
+                        case "windows" -> "natives-windows";
+                        case "osx" ->
+                            System.getProperty("os.arch").contains("aarch64") ? "natives-macos-arm64" : "natives-macos";
+                        default -> "natives-linux";
+                    };
+            for (String module : List.of("lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-openal")) {
+                classpath.add(maven(MAVEN_CENTRAL, "org.lwjgl:" + module + ":" + LWJGL3));
+                classpath.add(maven(MAVEN_CENTRAL, "org.lwjgl:" + module + ":" + LWJGL3 + ":" + classifier));
             }
         }
         JsonObject client = version.getAsJsonObject("downloads").getAsJsonObject("client");
@@ -260,10 +296,13 @@ public final class DevLaunch {
         throw last;
     }
 
+    static final String MAVEN_CENTRAL = "https://repo1.maven.org/maven2/";
+
     private Path maven(String base, String coordinate) throws IOException, InterruptedException {
         String[] parts = coordinate.split(":");
-        String path =
-                parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + ".jar";
+        String classifier = parts.length > 3 ? "-" + parts[3] : "";
+        String path = parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2]
+                + classifier + ".jar";
         if (!base.endsWith("/")) {
             base = base + "/";
         }

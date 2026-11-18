@@ -46,6 +46,7 @@ public final class Lazarus {
             "lol.trq.lazarus.agent.",
             "lol.trq.lazarus.compat.",
             "lol.trq.lazarus.launch.",
+            "lol.trq.lazarus.lwjgl3.",
             "lol.trq.lazarus.patch.",
             "lol.trq.lazarus.shadow.");
 

@@ -1,0 +1,36 @@
+// The LWJGL 2 API on LWJGL 3: the classes LWJGL 3 does not have, implemented on GLFW, OpenGL and OpenAL.
+// Shipped as its own jar and put on the class path only when a launch uses LWJGL 3.
+plugins {
+    id 'java-library'
+}
+
+base.archivesName = 'lol.trq.lazarus-lwjgl3'
+
+ext.lwjgl3Version = '3.4.3'
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+dependencies {
+    compileOnly "org.lwjgl:lwjgl:${lwjgl3Version}"
+    compileOnly "org.lwjgl:lwjgl-glfw:${lwjgl3Version}"
+    compileOnly "org.lwjgl:lwjgl-opengl:${lwjgl3Version}"
+    compileOnly "org.lwjgl:lwjgl-openal:${lwjgl3Version}"
+
+    testImplementation "org.lwjgl:lwjgl:${lwjgl3Version}"
+    testImplementation "org.lwjgl:lwjgl-glfw:${lwjgl3Version}"
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Title': 'lol.trq.lazarus-lwjgl3', 'Implementation-Version': project.version)
+    }
+}

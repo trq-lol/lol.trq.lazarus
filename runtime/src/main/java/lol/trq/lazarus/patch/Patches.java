@@ -15,6 +15,12 @@ public final class Patches {
 
     /** {@return every patch} */
     public static List<ClassPatch> all() {
+        List<ClassPatch> patches = new java.util.ArrayList<>(base());
+        patches.addAll(Lwjgl3Patches.all());
+        return List.copyOf(patches);
+    }
+
+    private static List<ClassPatch> base() {
         return List.of(
                 mixinModernAsm(),
                 asmApiLevel(),
