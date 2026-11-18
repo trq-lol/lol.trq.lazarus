@@ -1,6 +1,6 @@
 # lol.trq.lazarus
 
-Runs Minecraft Forge 1.8.9 on Java 17, 21 and 25.
+A modern runtime for Minecraft Forge 1.8.9: Java 17 to 25, optional LWJGL 3, and Log4Shell and Java4Shell patched. OptiFine and Mixin mods keep working.
 
 Forge 1.8.9 was built for Java 8 and fails before its window opens on anything newer. Lazarus is a single jar that
 fixes that from the outside: a replacement launch entrypoint and a Java agent that patch Forge, FML, Mixin 0.7 and

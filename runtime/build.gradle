@@ -85,7 +85,7 @@ publishing {
             artifact tasks.named('sourcesJar')
             pom {
                 name = 'lol.trq.lazarus'
-                description = 'Runs Minecraft Forge 1.8.9 on Java 17 and newer'
+                description = 'A modern runtime for Minecraft Forge 1.8.9: Java 17 to 25, optional LWJGL 3, Log4Shell and Java4Shell patched'
                 licenses {
                     license {
                         name = 'GNU Lesser General Public License v3.0 or later'
