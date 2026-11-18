@@ -1,23 +1,38 @@
 # lol.trq.lazarus
 
-> Launch runtime that boots stock Minecraft Forge 1.8.9 on Java 17 to 25 by patching LaunchWrapper, FML and Mixin
-> behaviour at runtime. LGPL-3.0-or-later. Pre-alpha.
+> One jar that boots stock Minecraft Forge 1.8.9 on Java 17, 21 and 25: a replacement LaunchWrapper entrypoint, a
+> Java agent that patches Forge, FML, Mixin 0.7 and old libraries as they load, a self-repairing bootstrap, and an
+> installer for the official launcher. OptiFine keeps working. LGPL-3.0-or-later.
 
 ## Docs
 
-- [README](README.md): goals, roadmap, build, credits
+- [README](README.md): install, how it works, build
+- [docs/how-it-works.md](docs/how-it-works.md): launch sequence, every patch and the JDK change behind it
+- [docs/compatibility.md](docs/compatibility.md): what is tested, known limitations
+- [docs/launchers.md](docs/launchers.md): official launcher, Prism/MultiMC, custom launchers
+- [docs/troubleshooting.md](docs/troubleshooting.md): errors and fixes
 - [CLAUDE.md](CLAUDE.md): mental model, patterns that matter, traps
-- [CHANGELOG](CHANGELOG.md): release notes
-- [CONTRIBUTING](CONTRIBUTING.md): commit, license-header and test conventions
-- [NOTICE](NOTICE.md): bundled third-party code
+- [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [NOTICE](NOTICE.md)
 
 ## Core source
 
-- [Classpath](src/main/java/lol/trq/lazarus/launch/Classpath.java): `java.class.path` as URLs
+- [Lazarus](runtime/src/main/java/lol/trq/lazarus/launch/Lazarus.java): entrypoint, LaunchClassLoader, tweaker chain
+- [Bootstrap](runtime/src/main/java/lol/trq/lazarus/launch/Bootstrap.java): relaunch with agent, class path, flags
+- [LazarusAgent](runtime/src/main/java/lol/trq/lazarus/agent/LazarusAgent.java): opens the JDK, installs patches
+- [Patches](runtime/src/main/java/lol/trq/lazarus/patch/Patches.java): the patch list
+- [LegacyReflection](runtime/src/main/java/lol/trq/lazarus/compat/LegacyReflection.java): `sun.reflect.ReflectionFactory` stand-in
+- [Fields](runtime/src/main/java/lol/trq/lazarus/compat/Fields.java): `static final` writes
+- [ElfVersions](runtime/src/main/java/lol/trq/lazarus/compat/ElfVersions.java): LWJGL Linux natives fix
+- [VanillaInstall](runtime/src/main/java/lol/trq/lazarus/install/VanillaInstall.java): official launcher install
+- [libraries.json](runtime/src/main/resources/lol/trq/lazarus/libraries.json): launch profile contract
 
 ## Examples
 
-- [ClasspathTest](src/test/java/lol/trq/lazarus/launch/ClasspathTest.java): parsing and de-duplication
+- [PatchesTest](runtime/src/test/java/lol/trq/lazarus/patch/PatchesTest.java): each patch on synthetic bytecode
+- [CompatTest](runtime/src/test/java/lol/trq/lazarus/compat/CompatTest.java): reflection stand-in, Pack200
+- [LaunchTest](runtime/src/test/java/lol/trq/lazarus/launch/LaunchTest.java): arguments, class path repair
+- [DevLaunch](harness/src/main/java/lol/trq/lazarus/harness/DevLaunch.java): booting Forge 1.8.9 on any JDK
+- [SmokeMod](smoke/src/main/java/lol/trq/lazarus/smoke/SmokeMod.java): main menu and world checks
 
 ## Optional
 
