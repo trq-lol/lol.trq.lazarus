@@ -108,6 +108,7 @@ public final class Window {
         glfwSetWindowSizeCallback(handle, (w, ww, wh) -> updateScale());
         glfwSetWindowFocusCallback(handle, (w, f) -> {
             focused = f;
+            InputTrace.focus(f);
             if (!f) {
                 Input.clear();
             }
@@ -148,6 +149,7 @@ public final class Window {
     public static void processMessages() {
         if (handle != NULL && Thread.currentThread() == mainThread) {
             glfwPollEvents();
+            InputTrace.tick();
         }
     }
 

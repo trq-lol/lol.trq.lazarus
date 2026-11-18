@@ -4,6 +4,7 @@ package org.lwjgl.input;
 import static org.lwjgl.glfw.GLFW.*;
 
 import lol.trq.lazarus.lwjgl3.Input;
+import lol.trq.lazarus.lwjgl3.InputTrace;
 import lol.trq.lazarus.lwjgl3.Window;
 import org.lwjgl.LWJGLException;
 
@@ -169,6 +170,7 @@ public final class Mouse {
      * @param grab whether to grab
      */
     public static void setGrabbed(boolean grab) {
+        InputTrace.grab(grab);
         grabbed = grab;
         long window = Window.handle();
         if (window == 0) {
@@ -192,6 +194,7 @@ public final class Mouse {
         if (window == 0) {
             return;
         }
+        InputTrace.warp(x, y);
         double wx = x / Window.contentScaleX();
         double wy = (Window.framebufferHeight() - 1 - y) / Window.contentScaleY();
         glfwSetCursorPos(window, wx, wy);

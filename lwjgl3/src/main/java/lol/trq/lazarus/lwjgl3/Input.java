@@ -113,6 +113,7 @@ public final class Input {
         mouseY = newY;
         accumDX += dx;
         accumDY += dy;
+        InputTrace.cursor(dx, dy);
         MOUSE.add(new MouseEvent(-1, false, newX, newY, dx, dy, 0, System.nanoTime()));
     }
 
@@ -178,6 +179,7 @@ public final class Input {
     public static synchronized int takeDX() {
         int v = accumDX;
         accumDX = 0;
+        InputTrace.readX(v);
         return v;
     }
 
@@ -185,6 +187,7 @@ public final class Input {
     public static synchronized int takeDY() {
         int v = accumDY;
         accumDY = 0;
+        InputTrace.readY(v);
         return v;
     }
 
