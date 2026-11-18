@@ -24,6 +24,8 @@ that bundle Mixin 0.7.
   - Mixin 0.7: its bundled ASM 5 replaced by ASM 9, and its `URLClassLoader` cast removed, also in relocated copies.
 - Log4Shell protection for the Log4j 2.0-beta9 that Minecraft 1.8.9 ships: logged messages are no longer
   interpolated (CVE-2021-44228, CVE-2021-45046, CVE-2021-45105) and the `jndi` lookup resolves to nothing.
+- Java4Shell (CVE-2026-114938) stopgap: Lazarus always runs with `-XX:-UseBASE64Intrinsics`, relaunching when the
+  running JVM has the Base64 intrinsics on.
 - A bootstrap that relaunches the JVM once, with the agent, a corrected class path and the JVM flags, when a launcher
   starts Lazarus without them.
 - LWJGL 2 Linux natives load on JDKs that no longer version `libjawt.so` symbols.

@@ -17,8 +17,9 @@ To skip the relaunch, also:
 4. Add `-javaagent:<path to lol.trq.lazarus jar>` to the JVM arguments.
 5. Put the Lazarus jar before Forge's `asm-all-5.0.3.jar` on the class path, or leave `asm-all` out. Lazarus bundles
    ASM 9.
-6. Add `-XX:+IgnoreUnrecognizedVMOptions --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow`
-   to the JVM arguments, so Java 22+ does not print warnings.
+6. Add `-XX:+IgnoreUnrecognizedVMOptions --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow
+   -XX:-UseBASE64Intrinsics` to the JVM arguments. The last one is the Java4Shell stopgap; without it the bootstrap
+   relaunches.
 
 Natives, `-Djava.library.path`, assets and authentication are handled as for stock Forge.
 

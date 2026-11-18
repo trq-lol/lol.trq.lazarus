@@ -108,7 +108,9 @@ child's status. Set `-Dlazarus.noRelaunch=true` to turn it off.
 
 ```
 -XX:+IgnoreUnrecognizedVMOptions --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow
+-XX:-UseBASE64Intrinsics
 ```
 
-LWJGL 2 loads native libraries and uses `sun.misc.Unsafe`, which Java 24+ warns about. The first flag lets Java 17
+`-XX:-UseBASE64Intrinsics` works around Java4Shell (CVE-2026-114938); see [security.md](security.md). The bootstrap
+relaunches when it is missing. LWJGL 2 loads native libraries and uses `sun.misc.Unsafe`, which Java 24+ warns about. The first flag lets Java 17
 and 21 ignore the option they do not know.

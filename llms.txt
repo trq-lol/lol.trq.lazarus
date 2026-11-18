@@ -11,6 +11,7 @@
 - [docs/compatibility.md](docs/compatibility.md): what is tested, known limitations
 - [docs/launchers.md](docs/launchers.md): official launcher, Prism/MultiMC, custom launchers
 - [docs/troubleshooting.md](docs/troubleshooting.md): errors and fixes
+- [docs/security.md](docs/security.md): Log4Shell, Java4Shell, what is and is not covered
 - [CLAUDE.md](CLAUDE.md): mental model, patterns that matter, traps
 - [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [NOTICE](NOTICE.md)
 
