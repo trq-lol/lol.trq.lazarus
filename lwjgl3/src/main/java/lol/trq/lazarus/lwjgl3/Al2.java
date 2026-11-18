@@ -19,13 +19,19 @@ import org.lwjgl.openal.ALCCapabilities;
 public final class Al2 {
     private static long device = NULL;
     private static long context = NULL;
+    private static int users;
 
     private Al2() {}
 
-    /** Opens the default device, creates and makes current a context, and loads the AL capabilities. */
+    /**
+     * Opens the default device, creates and makes current a context, and loads the AL capabilities. Calls are counted:
+     * Minecraft reloads its sound system by starting a new one before the old one has shut down, so a second create
+     * shares the open context and only the last {@link #destroy()} closes it.
+     */
     public static synchronized void create() throws LWJGLException {
         if (context != NULL) {
-            throw new IllegalStateException("OpenAL is already created");
+            users++;
+            return;
         }
         try {
             ALC.create();
@@ -44,6 +50,7 @@ public final class Al2 {
             throw new LWJGLException("could not create an OpenAL context");
         }
         AL.createCapabilities(alc);
+        users = 1;
     }
 
     /** {@return whether OpenAL is created} */
@@ -51,8 +58,13 @@ public final class Al2 {
         return context != NULL;
     }
 
-    /** Destroys the context, closes the device and unloads the library. */
+    /** Releases one user; the last one destroys the context, closes the device and unloads the library. */
     public static synchronized void destroy() {
+        if (users > 1) {
+            users--;
+            return;
+        }
+        users = 0;
         if (context != NULL) {
             alcMakeContextCurrent(NULL);
             alcDestroyContext(context);

@@ -117,6 +117,11 @@ public final class Window {
         updateScale();
         glfwShowWindow(handle);
         glfwFocusWindow(handle);
+        // macOS gives a Retina window its 2x framebuffer only once it is on screen: measure again after showing it,
+        // and report a resize so the game sizes its viewport to the real framebuffer.
+        glfwPollEvents();
+        updateScale();
+        resized = true;
         focused = glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
     }
 
@@ -242,6 +247,9 @@ public final class Window {
             var fh = stack.mallocInt(1);
             glfwGetWindowSize(handle, ww, wh);
             glfwGetFramebufferSize(handle, fw, fh);
+            if (fw.get(0) != framebufferWidth || fh.get(0) != framebufferHeight) {
+                resized = true;
+            }
             framebufferWidth = fw.get(0);
             framebufferHeight = fh.get(0);
             scaleX = ww.get(0) > 0 ? (float) fw.get(0) / ww.get(0) : 1f;
@@ -391,6 +399,11 @@ public final class Window {
     /** {@return the configured refresh rate} */
     public static int modeRefreshRate() {
         return refreshRate;
+    }
+
+    /** {@return whether the calling thread created the window, the only thread that may poll its events} */
+    public static boolean isMainThread() {
+        return Thread.currentThread() == mainThread;
     }
 
     /** {@return whether the size changed since the last call} */

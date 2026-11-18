@@ -111,7 +111,11 @@ public final class Display {
         if (processMessages) {
             Window.processMessages();
         }
-        wasResized = Window.takeResized();
+        // Only the main thread consumes the resize flag. Forge's splash screen also calls update() from its own
+        // thread, and taking the flag there would hide the resize from the game.
+        if (Window.isMainThread()) {
+            wasResized = Window.takeResized();
+        }
     }
 
     /** Processes window events. */
