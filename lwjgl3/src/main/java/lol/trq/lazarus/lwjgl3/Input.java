@@ -203,6 +203,22 @@ public final class Input {
         return insideWindow;
     }
 
+    /**
+     * Sets whether the cursor is over the window from its current position. GLFW only reports changes, so a cursor
+     * that is already inside when the window opens would otherwise count as outside.
+     *
+     * @param window the GLFW window
+     */
+    public static void seedInsideWindow(long window) {
+        double[] x = new double[1];
+        double[] y = new double[1];
+        int[] w = new int[1];
+        int[] h = new int[1];
+        glfwGetCursorPos(window, x, y);
+        glfwGetWindowSize(window, w, h);
+        insideWindow = x[0] >= 0 && y[0] >= 0 && x[0] < w[0] && y[0] < h[0];
+    }
+
     /** Forgets the last cursor position so the next movement does not produce a jump. */
     public static synchronized void resetCursorDelta() {
         lastCursorX = Double.NaN;

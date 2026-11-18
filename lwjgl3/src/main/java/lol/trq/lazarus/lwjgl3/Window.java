@@ -123,6 +123,7 @@ public final class Window {
         glfwPollEvents();
         updateScale();
         resized = true;
+        Input.seedInsideWindow(handle);
         focused = glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
     }
 

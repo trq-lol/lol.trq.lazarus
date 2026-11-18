@@ -156,7 +156,9 @@ public final class Mouse {
 
     /** {@return whether the cursor is over the window} */
     public static boolean isInsideWindow() {
-        return Input.insideWindow();
+        // LWJGL 2 reported a grabbed cursor as inside the window. GLFW sends no enter events for a disabled cursor,
+        // and Minecraft's macOS code ungrabs, recentres and regrabs every frame while this is false.
+        return grabbed || Input.insideWindow();
     }
 
     /** {@return whether the cursor is grabbed} */
@@ -171,11 +173,16 @@ public final class Mouse {
      */
     public static void setGrabbed(boolean grab) {
         InputTrace.grab(grab);
-        grabbed = grab;
         long window = Window.handle();
         if (window == 0) {
+            grabbed = grab;
             return;
         }
+        if (grab == grabbed
+                && glfwGetInputMode(window, GLFW_CURSOR) == (grab ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL)) {
+            return;
+        }
+        grabbed = grab;
         glfwSetInputMode(window, GLFW_CURSOR, grab ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         if (glfwRawMouseMotionSupported()) {
             glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, grab ? GLFW_TRUE : GLFW_FALSE);
