@@ -49,7 +49,11 @@ The bootstrap handles these when it finds the compatibility jar on the class pat
 
 - LWJGL 2's core and natives jars are removed from the class path (Minecraft's version lists them, and a launcher
   cannot remove inherited libraries).
-- On macOS the JVM is relaunched with `-XstartOnFirstThread`.
+- On macOS the JVM is relaunched with `-XstartOnFirstThread`, and AWT is made headless
+  (`-Djava.awt.headless=true`). Otherwise AWT, started off the main thread, hands its `[NSApplication run]` loop to
+  the main thread through GLFW's event pump and the game freezes. Headless AWT still decodes images; Minecraft's
+  clipboard is moved from AWT to GLFW on every LWJGL 3 launch. Mods that open AWT windows or dialogs throw
+  `HeadlessException` on macOS with LWJGL 3.
 
 LWJGL 3 extracts its own natives from its natives jars; LWJGL 2's natives on `java.library.path` do not interfere.
 

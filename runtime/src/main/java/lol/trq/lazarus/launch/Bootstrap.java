@@ -64,6 +64,7 @@ final class Bootstrap {
         command.addAll(JVM_FLAGS);
         if (needsFirstThread) {
             command.add(START_ON_FIRST_THREAD);
+            command.add("-Djava.awt.headless=true");
         }
         command.add("-javaagent:" + self.getAbsolutePath());
         command.add("-D" + RELAUNCHED + "=true");
@@ -126,6 +127,21 @@ final class Bootstrap {
                 .startsWith("mac");
         boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
         return mac && lwjgl3 && !jvmArgs.contains(START_ON_FIRST_THREAD);
+    }
+
+    /**
+     * On macOS with LWJGL 3, makes AWT headless before anything touches it. AWT started off the main thread queues its
+     * {@code [NSApplication run]} onto the main thread, GLFW's event pump runs it, and it never returns, freezing the
+     * game. Headless AWT still decodes images; Minecraft's clipboard is moved to GLFW by a patch.
+     */
+    static void headlessAwtOnMacLwjgl3() {
+        boolean mac = System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .startsWith("mac");
+        boolean lwjgl3 = classpath().stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        if (mac && lwjgl3 && System.getProperty("java.awt.headless") == null) {
+            System.setProperty("java.awt.headless", "true");
+        }
     }
 
     /** Whether a class path jar is the Lazarus LWJGL 3 compatibility jar. */

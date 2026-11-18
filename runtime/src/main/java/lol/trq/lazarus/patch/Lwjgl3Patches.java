@@ -13,6 +13,8 @@ import org.objectweb.asm.Opcodes;
 final class Lwjgl3Patches {
     static final String GL2 = "lol/trq/lazarus/lwjgl3/Gl2";
     static final String AL2 = "lol/trq/lazarus/lwjgl3/Al2";
+    static final String CLIPBOARD = "lol/trq/lazarus/lwjgl3/Clipboard";
+    static final String GUI_SCREEN = "net/minecraft/client/gui/GuiScreen";
 
     private static final String FB = "Ljava/nio/FloatBuffer;";
     private static final String IB = "Ljava/nio/IntBuffer;";
@@ -65,6 +67,25 @@ final class Lwjgl3Patches {
                             method),
                     Lwjgl3Patches::active));
         }
+        // Minecraft's clipboard goes through AWT, which is headless on macOS with LWJGL 3; use GLFW's (SRG names).
+        patches.add(new ConditionalPatch(
+                new ReplaceBodyPatch(
+                        "lwjgl3-clipboard-get",
+                        GUI_SCREEN,
+                        "func_146277_j",
+                        "()Ljava/lang/String;",
+                        CLIPBOARD,
+                        "getClipboardString"),
+                Lwjgl3Patches::active));
+        patches.add(new ConditionalPatch(
+                new ReplaceBodyPatch(
+                        "lwjgl3-clipboard-set",
+                        GUI_SCREEN,
+                        "func_146275_d",
+                        "(Ljava/lang/String;)V",
+                        CLIPBOARD,
+                        "setClipboardString"),
+                Lwjgl3Patches::active));
         return patches;
     }
 
