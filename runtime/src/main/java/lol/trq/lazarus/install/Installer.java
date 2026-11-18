@@ -20,6 +20,7 @@ import javax.swing.UIManager;
  *
  * <pre>
  * java -jar lol.trq.lazarus.jar install [--dir &lt;.minecraft&gt;] [--forge &lt;version id&gt;] [--memory &lt;MB&gt;]
+ * java -jar lol.trq.lazarus.jar prism
  * java -jar lol.trq.lazarus.jar version
  * </pre>
  */
@@ -45,6 +46,10 @@ public final class Installer {
         }
         if (args[0].equals("version")) {
             System.out.println(version());
+            return;
+        }
+        if (args[0].equals("prism")) {
+            System.out.println(prismComponent(version()));
             return;
         }
         if (!args[0].equals("install")) {
@@ -139,6 +144,7 @@ public final class Installer {
                       --dir <path>      the launcher's game directory (default: %s)
                       --forge <id>      the Forge version to build on (default: newest 1.8.9 Forge found)
                       --memory <MB>     maximum heap for the profile (default: 2048)
+                  java -jar lol.trq.lazarus.jar prism         print a Prism Launcher / MultiMC component
                   java -jar lol.trq.lazarus.jar version
                 """.formatted(version(), VanillaInstall.defaultMinecraftDir());
     }
@@ -159,5 +165,27 @@ public final class Installer {
         } catch (URISyntaxException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * Builds a Prism Launcher / MultiMC component that adds Lazarus to a Forge 1.8.9 instance. The jar is looked up
+     * in the instance's {@code libraries} folder.
+     *
+     * @param version the Lazarus version
+     * @return the component JSON
+     */
+    static String prismComponent(String version) {
+        return """
+                {
+                  "formatVersion": 1,
+                  "name": "Lazarus",
+                  "uid": "lol.trq.lazarus",
+                  "version": "%1$s",
+                  "mainClass": "lol.trq.lazarus.launch.Lazarus",
+                  "libraries": [
+                    {"name": "lol.trq.lazarus:lol.trq.lazarus:%1$s", "MMC-hint": "local"}
+                  ],
+                  "requires": [{"uid": "net.minecraftforge"}]
+                }""".formatted(version);
     }
 }
