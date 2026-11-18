@@ -68,7 +68,7 @@ public final class DevLaunch {
         DevLaunch launch = new DevLaunch(cache);
         List<Path> classpath = new ArrayList<>();
         boolean useLwjgl3 = Boolean.parseBoolean(opts.getOrDefault("lwjgl3", "false"));
-        Path natives = launch.vanilla(classpath, useLwjgl3);
+        Path natives = launch.vanilla(classpath, useLwjgl3, mode.equals("bare"));
         if (useLwjgl3) {
             classpath.add(Path.of(require(opts, "lwjgl3Jar")).toAbsolutePath());
         }
@@ -150,7 +150,7 @@ public final class DevLaunch {
     }
 
     Path vanilla(List<Path> classpath) throws IOException, InterruptedException {
-        return vanilla(classpath, false);
+        return vanilla(classpath, false, false);
     }
 
     /** LWJGL 3 version used when a launch replaces LWJGL 2. */
@@ -162,7 +162,7 @@ public final class DevLaunch {
      * @param lwjgl3 whether to replace LWJGL 2 (its jar and natives) with LWJGL 3
      * @return the natives directory
      */
-    Path vanilla(List<Path> classpath, boolean lwjgl3) throws IOException, InterruptedException {
+    Path vanilla(List<Path> classpath, boolean lwjgl3, boolean keepLwjgl2) throws IOException, InterruptedException {
         JsonObject manifest = json(fetch(MANIFEST, cache.resolve("version_manifest_v2.json"), false));
         String url = null;
         for (JsonElement v : manifest.getAsJsonArray("versions")) {
@@ -171,7 +171,7 @@ public final class DevLaunch {
             }
         }
         JsonObject version = json(fetch(url, cache.resolve("versions/" + MC + ".json"), true));
-        Path natives = cache.resolve("natives/" + MC + (lwjgl3 ? "-lwjgl3" : ""));
+        Path natives = cache.resolve("natives/" + MC + (lwjgl3 && !keepLwjgl2 ? "-lwjgl3" : ""));
         Files.createDirectories(natives);
         for (JsonElement el : version.getAsJsonArray("libraries")) {
             JsonObject lib = el.getAsJsonObject();
@@ -180,6 +180,7 @@ public final class DevLaunch {
             }
             String libName = lib.get("name").getAsString();
             if (lwjgl3
+                    && !keepLwjgl2
                     && (libName.startsWith("org.lwjgl.lwjgl:lwjgl:")
                             || libName.startsWith("org.lwjgl.lwjgl:lwjgl-platform:"))) {
                 continue;

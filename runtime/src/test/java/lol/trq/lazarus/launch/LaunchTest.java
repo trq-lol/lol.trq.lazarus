@@ -63,6 +63,33 @@ class LaunchTest {
     }
 
     @Test
+    void lwjgl3CompatDropsLwjgl2ButKeepsUtil() {
+        File self = new File("libs/lol.trq.lazarus-0.1.0.jar");
+        List<String> fixed = Bootstrap.fixClasspath(
+                List.of(
+                        "libs/lwjgl-2.9.4-nightly-20150209.jar",
+                        "libs/lwjgl_util-2.9.4-nightly-20150209.jar",
+                        "libs/lwjgl-platform-2.9.4-nightly-20150209.jar",
+                        "libs/lwjgl-3.4.3.jar",
+                        "libs/lol.trq.lazarus-lwjgl3-0.1.0.jar"),
+                self);
+        assertEquals(
+                List.of(
+                        self.getAbsolutePath(),
+                        "libs/lwjgl_util-2.9.4-nightly-20150209.jar",
+                        "libs/lwjgl-3.4.3.jar",
+                        "libs/lol.trq.lazarus-lwjgl3-0.1.0.jar"),
+                fixed);
+    }
+
+    @Test
+    void withoutLwjgl3CompatLwjgl2Stays() {
+        File self = new File("libs/lol.trq.lazarus-0.1.0.jar");
+        List<String> fixed = Bootstrap.fixClasspath(List.of("libs/lwjgl-2.9.4-nightly-20150209.jar"), self);
+        assertEquals(List.of(self.getAbsolutePath(), "libs/lwjgl-2.9.4-nightly-20150209.jar"), fixed);
+    }
+
+    @Test
     void safetyFlagsAlwaysWin() {
         assertTrue(Bootstrap.JVM_FLAGS.contains("-XX:-UseBASE64Intrinsics"));
         assertTrue(Bootstrap.overridesSafetyFlag("-XX:+UseBASE64Intrinsics"));

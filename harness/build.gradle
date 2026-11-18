@@ -53,6 +53,7 @@ registerRun('runBare25', 'bare', 25)
 registerRun('runLwjgl3_17', 'lazarus', 17, true)
 registerRun('runLwjgl3_21', 'lazarus', 21, true)
 registerRun('runLwjgl3_25', 'lazarus', 25, true)
+registerRun('runBareLwjgl3_25', 'bare', 25, true)
 
 // Launches a profile written by the installer, the way the official launcher does. -PmcDir=... -Pprofile=...
 tasks.register('runProfile', JavaExec) {

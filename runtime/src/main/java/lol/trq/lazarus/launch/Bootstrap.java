@@ -16,7 +16,8 @@ import lol.trq.lazarus.agent.LazarusAgent;
  * Makes sure the JVM is set up for Lazarus, relaunching it once with a corrected command line when it is not.
  *
  * <p>A launcher only has to start {@link Lazarus} with the Lazarus jar on the class path. If the agent is missing,
- * if Forge's ASM 5 comes before the bundled ASM 9 on the class path, or if the JVM flags that silence Java 22+
+ * if Forge's ASM 5 comes before the bundled ASM 9 on the class path, if LWJGL 2's jars are present while the LWJGL 3
+ * compatibility jar is, or if the JVM flags that silence Java 22+
  * warnings are missing, the bootstrap starts a child JVM with the agent, a reordered class path and the flags, and
  * exits with its status.
  */
@@ -49,7 +50,8 @@ final class Bootstrap {
         List<String> fixedClasspath = fixClasspath(classpath, self);
         boolean agent = LazarusAgent.installed();
         boolean base64Safe = !Security.base64IntrinsicsEnabled();
-        if (agent && fixedClasspath.equals(classpath) && base64Safe) {
+        boolean needsFirstThread = needsFirstThread(classpath, inputArguments());
+        if (agent && fixedClasspath.equals(classpath) && base64Safe && !needsFirstThread) {
             return Optional.empty();
         }
         List<String> command = new ArrayList<>();
@@ -60,6 +62,9 @@ final class Bootstrap {
         }
         // Lazarus's flags go last so they win over anything the launcher passed.
         command.addAll(JVM_FLAGS);
+        if (needsFirstThread) {
+            command.add(START_ON_FIRST_THREAD);
+        }
         command.add("-javaagent:" + self.getAbsolutePath());
         command.add("-D" + RELAUNCHED + "=true");
         command.add("-cp");
@@ -73,7 +78,8 @@ final class Bootstrap {
         System.err.println("[Lazarus] relaunching: "
                 + (agent ? "" : "agent not installed; ")
                 + (fixedClasspath.equals(classpath) ? "" : "class path reordered for ASM 9; ")
-                + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938)"));
+                + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938); ")
+                + (needsFirstThread ? "-XstartOnFirstThread for GLFW on macOS" : ""));
         Process child =
                 new ProcessBuilder(javaExecutable(), "@" + argfile).inheritIO().start();
         Runtime.getRuntime().addShutdownHook(new Thread(child::destroy, "lazarus-relaunch-reaper"));
@@ -88,6 +94,7 @@ final class Bootstrap {
      * @return the corrected entries
      */
     static List<String> fixClasspath(List<String> classpath, File self) {
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
         String selfPath = self.getAbsolutePath();
         List<String> fixed = new ArrayList<>();
         fixed.add(selfPath);
@@ -96,12 +103,37 @@ final class Bootstrap {
             if (entry.isBlank()
                     || new File(entry).getAbsolutePath().equals(selfPath)
                     || name.startsWith("asm-all-")
-                    || name.startsWith("asm-debug-all-")) {
+                    || name.startsWith("asm-debug-all-")
+                    || (lwjgl3 && isLwjgl2(name))) {
                 continue;
             }
             fixed.add(entry);
         }
         return fixed;
+    }
+
+    static final String START_ON_FIRST_THREAD = "-XstartOnFirstThread";
+
+    /**
+     * Whether the JVM must be relaunched with {@code -XstartOnFirstThread}: on macOS, GLFW only works on the process's
+     * first thread, which Java gives to {@code main} only with that flag.
+     */
+    static boolean needsFirstThread(List<String> classpath, List<String> jvmArgs) {
+        boolean mac = System.getProperty("os.name", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .startsWith("mac");
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        return mac && lwjgl3 && !jvmArgs.contains(START_ON_FIRST_THREAD);
+    }
+
+    /** Whether a class path jar is the Lazarus LWJGL 3 compatibility jar. */
+    static boolean isLwjgl3Compat(String fileName) {
+        return fileName.startsWith("lol.trq.lazarus-lwjgl3");
+    }
+
+    /** Whether a class path jar is LWJGL 2's core or natives jar, which LWJGL 3 replaces. */
+    static boolean isLwjgl2(String fileName) {
+        return fileName.startsWith("lwjgl-2.") || fileName.startsWith("lwjgl-platform-2.");
     }
 
     /**
