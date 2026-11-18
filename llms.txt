@@ -1,0 +1,25 @@
+# lol.trq.lazarus
+
+> Launch runtime that boots stock Minecraft Forge 1.8.9 on Java 17 to 25 by patching LaunchWrapper, FML and Mixin
+> behaviour at runtime. LGPL-3.0-or-later. Pre-alpha.
+
+## Docs
+
+- [README](README.md): goals, roadmap, build, credits
+- [CLAUDE.md](CLAUDE.md): mental model, patterns that matter, traps
+- [CHANGELOG](CHANGELOG.md): release notes
+- [CONTRIBUTING](CONTRIBUTING.md): commit, license-header and test conventions
+- [NOTICE](NOTICE.md): bundled third-party code
+
+## Core source
+
+- [Classpath](src/main/java/lol/trq/lazarus/launch/Classpath.java): `java.class.path` as URLs
+
+## Examples
+
+- [ClasspathTest](src/test/java/lol/trq/lazarus/launch/ClasspathTest.java): parsing and de-duplication
+
+## Optional
+
+- [SECURITY](SECURITY.md), [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md), [DISCLAIMER](DISCLAIMER.md),
+  [COPYING.LESSER](COPYING.LESSER), [COPYING](COPYING)

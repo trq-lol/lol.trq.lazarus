@@ -1,0 +1,11 @@
+.gradle/
+build/
+out/
+run/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# planning documents live in a separate repository
+docs/superpowers/
