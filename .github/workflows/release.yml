@@ -31,5 +31,5 @@ jobs:
           cp "$jar" "lol.trq.lazarus-${version}.jar"
           sha256sum "lol.trq.lazarus-${version}.jar" > "lol.trq.lazarus-${version}.jar.sha256"
           awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --title "Lazarus $version" --notes-file notes.md \
+          gh release create "$GITHUB_REF_NAME" --title "lol.trq.lazarus $version" --notes-file notes.md \
             "lol.trq.lazarus-${version}.jar" "lol.trq.lazarus-${version}.jar.sha256"
