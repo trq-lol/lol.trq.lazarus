@@ -1,0 +1,35 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build
+        run: ./gradlew spotlessCheck build -Pversion=${GITHUB_REF_NAME#v}
+      - name: Publish to GitHub Packages
+        run: ./gradlew :runtime:publishAllPublicationsToGitHubPackagesRepository -Pversion=${GITHUB_REF_NAME#v}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          jar=runtime/build/libs/lol.trq.lazarus-${version}.jar
+          cp "$jar" "lol.trq.lazarus-${version}.jar"
+          sha256sum "lol.trq.lazarus-${version}.jar" > "lol.trq.lazarus-${version}.jar.sha256"
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "Lazarus $version" --notes-file notes.md \
+            "lol.trq.lazarus-${version}.jar" "lol.trq.lazarus-${version}.jar.sha256"
