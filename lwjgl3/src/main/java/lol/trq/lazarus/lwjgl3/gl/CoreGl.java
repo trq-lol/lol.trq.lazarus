@@ -952,7 +952,14 @@ public final class CoreGl {
         int count = immediateCount;
         if (count == 0) return;
         if (recording != null) {
-            recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count, beginAttributes).draw(mode));
+            recording.add(new StaticMesh(
+                            Arrays.copyOf(immediate, count * FLOATS),
+                            count,
+                            beginAttributes,
+                            new float[0],
+                            new int[0],
+                            new int[0])
+                    .draw(mode));
             if (!executeWhileRecording) return;
         }
         if (rawCount > 0) {
@@ -1243,7 +1250,7 @@ public final class CoreGl {
         }
         flush();
         if (recording != null) {
-            recording.add(new StaticMesh(gather(first, count), count, enabledArrays()).draw(mode));
+            recording.add(capture(first, count).draw(mode));
             if (!executeWhileRecording) return;
         }
         if (!vertexArray.enabled) return;
@@ -1372,12 +1379,24 @@ public final class CoreGl {
     }
 
     /** Reads the enabled client arrays into the interleaved layout, for display list capture. */
-    private static float[] gather(int first, int count) {
-        ByteBuffer[] readBack = new ByteBuffer[attribArrays.length];
-        ByteBuffer[] saved = new ByteBuffer[attribArrays.length];
-        long[] savedOffsets = new long[attribArrays.length];
-        for (int i = 0; i < attribArrays.length; i++) {
-            Array a = attribArrays[i];
+    private static StaticMesh capture(int first, int count) {
+        int generics = Integer.bitCount(genericEnabled);
+        Array[] arrays = Arrays.copyOf(attribArrays, attribArrays.length + generics);
+        int[] genericLocations = new int[generics];
+        int[] genericSizes = new int[generics];
+        int extraFloats = 0;
+        for (int bits = genericEnabled, g = 0; bits != 0; bits &= bits - 1, g++) {
+            int loc = Integer.numberOfTrailingZeros(bits);
+            genericLocations[g] = loc;
+            genericSizes[g] = generic[loc].size;
+            extraFloats += generic[loc].size;
+            arrays[attribArrays.length + g] = generic[loc];
+        }
+        ByteBuffer[] readBack = new ByteBuffer[arrays.length];
+        ByteBuffer[] saved = new ByteBuffer[arrays.length];
+        long[] savedOffsets = new long[arrays.length];
+        for (int i = 0; i < arrays.length; i++) {
+            Array a = arrays[i];
             if (a.enabled && a.memory == null && a.buffer != 0) {
                 readBack[i] = MemoryUtil.memAlloc(Math.toIntExact(a.span(first, count)));
                 bindArrayBuffer(a.buffer);
@@ -1389,12 +1408,21 @@ public final class CoreGl {
             }
         }
         try {
-            return gatherClient(first, count);
+            float[] extra = new float[count * extraFloats];
+            for (int v = 0, o = 0; v < count; v++) {
+                for (int g = 0; g < generics; g++) {
+                    Array a = arrays[attribArrays.length + g];
+                    read(a, first + v, a.normalize, extra, o, a.size, null);
+                    o += a.size;
+                }
+            }
+            return new StaticMesh(
+                    gatherClient(first, count), count, enabledArrays(), extra, genericLocations, genericSizes);
         } finally {
-            for (int i = 0; i < attribArrays.length; i++) {
+            for (int i = 0; i < arrays.length; i++) {
                 if (readBack[i] != null) {
-                    attribArrays[i].memory = saved[i];
-                    attribArrays[i].offset = savedOffsets[i];
+                    arrays[i].memory = saved[i];
+                    arrays[i].offset = savedOffsets[i];
                     MemoryUtil.memFree(readBack[i]);
                 }
             }
