@@ -102,6 +102,9 @@ public final class DevLaunch {
         writeMutedOptions(gameDir);
         // Screenshots and benchmarks need the world, not the pause menu that opens when the window loses focus.
         setOption(gameDir.resolve("options.txt"), "pauseOnLostFocus", "false");
+        // Keep Forge's splash screen on (OptiFine turns it off), so the splash thread's rendering is always exercised.
+        Files.createDirectories(gameDir.resolve("config"));
+        setOption(gameDir.resolve("config").resolve("splash.properties"), "enabled", "true");
         deleteSmokeWorlds(gameDir);
         selectShaderPack(gameDir, opts.getOrDefault("shaderPack", ""));
 
@@ -396,7 +399,8 @@ public final class DevLaunch {
 
     /** Sets {@code key:value} ({@code key=value} in optionsshaders.txt) in an options file, keeping other lines. */
     private static void setOption(Path file, String key, String value) throws IOException {
-        String separator = file.getFileName().toString().equals("optionsshaders.txt") ? "=" : ":";
+        String name = file.getFileName().toString();
+        String separator = name.equals("optionsshaders.txt") || name.endsWith(".properties") ? "=" : ":";
         List<String> lines =
                 Files.exists(file) ? new java.util.ArrayList<>(Files.readAllLines(file)) : new java.util.ArrayList<>();
         lines.removeIf(line -> line.startsWith(key + separator));

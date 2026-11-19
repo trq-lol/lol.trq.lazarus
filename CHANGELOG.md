@@ -3,6 +3,14 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-11-19
+
+### Fixed
+
+- The core renderer no longer raises GL errors while Forge's splash screen is up. The splash thread draws on the
+  window's context while the main thread loads on a shared one, and the two shared one set of cached bindings and one
+  stream buffer; each thread now has its own.
+
 ## [0.4.0] - 2026-11-19
 
 ### Changed
