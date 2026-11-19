@@ -167,7 +167,10 @@ class PatchesTest {
                 "1.8");
         MethodVisitor mv = cw.visitMethod(
                 Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC,
-                "get", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+                "get",
+                "(Ljava/lang/String;)Ljava/lang/String;",
+                null,
+                new String[] {"java/io/IOException"});
         mv.visitCode();
         Label none = new Label();
         mv.visitVarInsn(Opcodes.ALOAD, 0);
@@ -190,6 +193,7 @@ class PatchesTest {
         assertEquals("1.7", get.invoke(null, "1.7"));
         assertEquals("1.8", get.invoke(null, "17"));
         assertNull(get.invoke(null, "banana"));
+        assertArrayEquals(new Class<?>[] {java.io.IOException.class}, get.getExceptionTypes());
     }
 
     @Test
@@ -218,6 +222,18 @@ class PatchesTest {
         byte[] patched = new NullReturnPatch("t", name, "lookup").apply(name, bytes);
         Method lookup = new Bytecode.Loader().define(name, patched).getMethod("lookup", String.class);
         assertNull(lookup.invoke(null, "ldap://example/x"));
+    }
+
+    @Test
+    void nullReturnLeavesNativeMethodsAlone() {
+        String name = "test/NativeLookup";
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null);
+        cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_NATIVE, "lookup", "()Ljava/lang/String;", null, null)
+                .visitEnd();
+        cw.visitEnd();
+        byte[] bytes = cw.toByteArray();
+        assertSame(bytes, new NullReturnPatch("t", name, "lookup").apply(name, bytes));
     }
 
     @Test

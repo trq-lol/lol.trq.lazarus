@@ -30,7 +30,7 @@ public final class NullReturnPatch extends TreePatch {
         for (MethodNode m : node.methods) {
             int sort = Type.getReturnType(m.desc).getSort();
             if (!m.name.equals(method)
-                    || (m.access & Opcodes.ACC_ABSTRACT) != 0
+                    || (m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0
                     || (sort != Type.OBJECT && sort != Type.ARRAY)) {
                 continue;
             }

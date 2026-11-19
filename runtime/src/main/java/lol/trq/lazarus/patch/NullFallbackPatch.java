@@ -60,6 +60,7 @@ public final class NullFallbackPatch extends TreePatch {
         for (MethodNode m : node.methods) {
             if (m.name.equals(method) && m.desc.equals(descriptor) && (m.access & Opcodes.ACC_STATIC) != 0) {
                 original = m;
+                break;
             }
         }
         if (original == null) {
@@ -72,7 +73,8 @@ public final class NullFallbackPatch extends TreePatch {
 
         Type returnType = Type.getReturnType(descriptor);
         Type[] args = Type.getArgumentTypes(descriptor);
-        MethodNode wrapper = new MethodNode(access, method, descriptor, null, null);
+        MethodNode wrapper = new MethodNode(
+                access, method, descriptor, original.signature, original.exceptions.toArray(new String[0]));
         InsnList code = wrapper.instructions;
         loadArgs(code, args, 0);
         code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner(), renamed, descriptor, false));
