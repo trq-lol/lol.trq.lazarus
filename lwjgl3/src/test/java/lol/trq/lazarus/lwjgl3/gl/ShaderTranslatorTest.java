@@ -126,4 +126,30 @@ class ShaderTranslatorTest {
         String v410 = "#version 410 core\nvoid main() {}";
         assertEquals(v410, ShaderTranslator.translate(ShaderTranslator.VERTEX, v410));
     }
+
+    @Test
+    void fogBuiltinsBecomeUniformsAndVaryings() {
+        String vsh = ShaderTranslator.translate(
+                ShaderTranslator.VERTEX, "void main() { gl_Position = ftransform(); gl_FogFragCoord = 1.0; }");
+        assertTrue(vsh.contains("out float lz_FogFragCoord;"), vsh);
+        String fsh = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "void main() { float f = clamp((gl_Fog.end - gl_FogFragCoord) * gl_Fog.scale, 0.0, 1.0);"
+                        + " gl_FragColor = mix(gl_Fog.color, vec4(1.0), f); }");
+        assertTrue(fsh.contains("uniform lz_FogParameters lz_Fog;"), fsh);
+        assertTrue(fsh.contains("in float lz_FogFragCoord;"), fsh);
+        assertTrue(fsh.contains("lz_Fog.end - lz_FogFragCoord"), fsh);
+        assertFalse(fsh.contains("gl_Fog"), fsh);
+    }
+
+    @Test
+    void gpuShader4FunctionsBecomeCore() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "#version 120\n#extension GL_EXT_gpu_shader4 : require\nuniform sampler2D t;\n"
+                        + "void main() { ivec2 s = textureSize2D(t, 0); gl_FragColor = texelFetch2D(t, s / 2, 0); }");
+        assertTrue(out.contains("textureSize(t, 0)"), out);
+        assertTrue(out.contains("texelFetch(t, s / 2, 0)"), out);
+        assertFalse(out.contains("#extension"), out);
+    }
 }

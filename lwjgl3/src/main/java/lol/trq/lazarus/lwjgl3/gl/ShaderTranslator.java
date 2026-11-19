@@ -88,16 +88,33 @@ final class ShaderTranslator {
         body = builtin(body, "gl_ProjectionMatrix", "lz_ProjectionMatrix", "uniform mat4 lz_ProjectionMatrix;", decls);
         body = builtin(body, "gl_TextureMatrix", "lz_TextureMatrix", "uniform mat4 lz_TextureMatrix[2];", decls);
         body = builtin(body, "gl_NormalMatrix", "lz_NormalMatrix", "uniform mat3 lz_NormalMatrix;", decls);
+        body = builtin(
+                body,
+                "gl_Fog",
+                "lz_Fog",
+                "struct lz_FogParameters { vec4 color; float density; float start; float end; float scale; };\n"
+                        + "uniform lz_FogParameters lz_Fog;",
+                decls);
+        body = builtin(
+                body, "gl_FogFragCoord", "lz_FogFragCoord", (vertex ? "out" : "in") + " float lz_FogFragCoord;", decls);
         if (body.contains("lz_ModelViewProjectionMatrix * lz_Vertex")) {
             decls.add("uniform mat4 lz_ModelViewProjectionMatrix;");
             decls.add("in vec4 lz_Vertex;");
         }
 
         body = call(body, "texture2DLod", "textureLod");
+        body = call(body, "texture2DGrad", "textureGrad");
+        body = call(body, "texture2DProjLod", "textureProjLod");
+        body = call(body, "texelFetch2D", "texelFetch");
+        body = call(body, "textureSize2D", "textureSize");
         body = call(body, "texture2DProj", "textureProj");
         body = call(body, "texture2D", "texture");
         body = call(body, "texture3D", "texture");
         body = call(body, "textureCube", "texture");
+        if (body.matches("(?s).*\\bshadow2DLod\\s*\\(.*")) {
+            body = call(body, "shadow2DLod", "lz_shadow2DLod");
+            decls.add("vec4 lz_shadow2DLod(sampler2DShadow s, vec3 c, float l) { return vec4(textureLod(s, c, l)); }");
+        }
         if (body.matches("(?s).*\\bshadow2D\\s*\\(.*")) {
             body = call(body, "shadow2D", "lz_shadow2D");
             decls.add("vec4 lz_shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }");
