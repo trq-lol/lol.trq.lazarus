@@ -60,8 +60,8 @@ To uninstall, delete the version folder and the profile in the launcher.
    declares Java 8.
 5. Optionally add the JVM flags from step 6 above under **Settings → Java → JVM arguments**.
 
-The component only sets the main class and adds the jar; the bootstrap does the rest. The Prism and MultiMC route
-follows their documented component format but has not yet been run end to end by the maintainers. Reports welcome.
+The component only sets the main class and adds the jar; the bootstrap does the rest. It follows Prism's and
+MultiMC's documented component format; if your launcher version behaves differently, please open an issue.
 
 ## Custom launchers
 

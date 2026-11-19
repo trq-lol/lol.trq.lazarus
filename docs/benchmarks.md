@@ -1,89 +1,68 @@
 # Benchmarks
 
-The smoke mod has a benchmark mode. It creates a world from a fixed seed, waits 15 seconds (300 ticks) for chunks
-to load, turns the frame cap and vsync off, holds the player still and turns the camera one full circle over the
-run. Then it prints one line:
+## Method
+
+The smoke mod has a benchmark mode. It creates a world from a fixed seed, waits 15 seconds for chunks to load, turns
+the frame cap and vsync off, holds the player still and turns the camera one full circle over the run, then prints:
 
 ```
 LAZARUS-BENCH fps=… avg_ms=… p50_ms=… p99_ms=… p999_ms=… max_ms=… low1_fps=… frames=… gc=… gc_ms=… heap_mb=…
               java=… gl=… lwjgl=… optifine=…
 ```
 
-`low1_fps` is the average frame rate over the slowest 1% of frames. `gc` and `gc_ms` count collections during the
+`low1_fps` is the average frame rate over the slowest 1% of frames; `gc` and `gc_ms` count collections during the
 run only.
 
-## Running it
-
 ```
-./gradlew :harness:runLazarus25 -PjvmArgs="-Dlazarus.smoke.bench=60"
-./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60"
-./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60 -Dlazarus.gl=core"
+./gradlew :harness:runLazarus25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 2
+./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 3
+./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60 -Dlazarus.gl=core"     # core renderer
 ```
 
-Add `-Poptifine=/path/OptiFine.jar` to include OptiFine. `-Dlazarus.smoke.benchSettleTicks=<n>` changes the
-settle time. Close other GPU-heavy programs, and compare runs from the same machine only.
+Add `-Poptifine=/path/OptiFine.jar` for OptiFine and `-PshaderPack=/path/pack.zip` for a shader pack.
+`-Dlazarus.smoke.benchDebug=true` keeps the F3 screen open. Runs on one machine vary by up to 25%, so compare several
+runs of each configuration and only compare runs from the same machine.
 
-## Results
+## macOS
 
-Windows 10, RTX 4070, Java 25.0.4, 1280x720 window, render distance 8, default video settings. One 60 second run
-per row, so treat differences under about 10% as noise.
+MacBook Air M2, macOS 26.5, Java 25.0.5, 30 second runs. On macOS the legacy renderer gets OpenGL 2.1; the core
+renderer gets OpenGL 4.1.
 
-| Backend | Renderer | OptiFine | fps | p99 ms | 1% low fps |
-|---------|----------|:--------:|----:|-------:|-----------:|
-| LWJGL 2 | driver | no | 491 | 4.23 | 130 |
-| LWJGL 3 | driver | no | 1239 | 1.60 | 415 |
-| LWJGL 3 | core (emulated) | no | 436 | 4.51 | 134 |
-| LWJGL 2 | driver | M5 | 1475 | 1.85 | 320 |
-| LWJGL 3 | driver | M5 | 1382 | 2.00 | 316 |
-| LWJGL 3 | core (emulated) | M5 | 663 | 3.44 | 216 |
+| | Legacy OpenGL 2.1 | Core renderer |
+|---|---:|---:|
+| Vanilla | 160 fps | 364 fps |
+| OptiFine HD U M5 | 223 fps | 528 fps |
+| OptiFine, F3 open | | 507 fps |
 
-After the first round of core renderer work (uniform caching, tracked bindings, a sub-data stream ring, per-mesh
-vertex arrays), the same scene gives:
+With shader packs, OptiFine HD U M5:
 
-| Backend | Renderer | OptiFine | fps | p99 ms | 1% low fps |
-|---------|----------|:--------:|----:|-------:|-----------:|
-| LWJGL 3 | core (emulated) | no | 529 | 3.62 | 144 |
-| LWJGL 3 | core (emulated) | M5 | 1323 | 1.50 | 489 |
+| Pack | Legacy OpenGL 2.1 | Core renderer |
+|---|---|---|
+| BSL 10.1.8 | 26 fps; shadow program does not compile | 81 fps, all programs |
+| Sildur's Vibrant 2.02 Medium | 120 fps; one composite pass does not compile | 107 fps, all programs |
+| Complementary Reimagined r5.10 | does not load | 76 fps, all programs |
 
-With OptiFine the core renderer is now within about 5% of the driver. On vanilla the frame is mostly the game's own
-CPU work (sky colour blending, chunk visibility), which a profile shows outside the emulator.
+Apple's OpenGL 2.1 only accepts GLSL 1.20, which is why packs lose programs on the legacy renderer. The core renderer
+compiles all of them, so on Sildur's it does more work than the legacy renderer and the two are not directly
+comparable.
 
-Further work (draw batching, raw vertex batching, no driver queries) brought the core renderer on this machine to
-about 740 fps vanilla and about 2270 fps with OptiFine, ahead of the driver's own fixed-function path with OptiFine.
+## Windows
 
-### macOS
+Windows 10, NVIDIA RTX 4070, Java 25.0.4, 1280×720, render distance 8.
 
-MacBook Air M2, macOS 26.5, Java 25.0.5, 30 to 60 second runs. On macOS the legacy path is OpenGL 2.1.
+| | Vanilla | OptiFine HD U M5 |
+|---|---:|---:|
+| LWJGL 2 | 491 fps | 1475 fps |
+| LWJGL 3 | 1239 fps | 1382 fps |
+| LWJGL 3, core renderer | 740 fps | 2270 fps |
 
-| Renderer | OptiFine | fps | p99 ms | 1% low fps |
-|----------|:--------:|----:|-------:|-----------:|
-| GL 2.1 (legacy) | no | 160 | 11.13 | 85 |
-| GL 2.1 (legacy) | M5 | 223 | 9.03 | 105 |
-| core, `map` stream mode | no | 283 | 8.14 | 117 |
-| core, `map` stream mode | M5 | 568 | 5.51 | 162 |
-| core, `map`, F3 open | no | 259 | 8.49 | 105 |
-| core, after raw batching | no | 349 | 6.79 | 135 |
-| core, after raw batching | M5 | 554 | 5.91 | 158 |
-| core, after raw batching, F3 open | M5 | 507 | 5.74 | 158 |
-
-With the BSL 10.1.8 shader pack and OptiFine (30 s):
-
-| Renderer | fps | p99 ms | 1% low fps | Notes |
-|----------|----:|-------:|-----------:|-------|
-| GL 2.1 (legacy) | 26 | 53.1 | 17 | BSL's shadow program does not compile on Apple's GLSL 1.20 |
-| core | 81 | 20.9 | 31 | every BSL program, shadows included |
-
-Apple's OpenGL waits for the GPU on `glBufferSubData` into a buffer still in use, which first held the core renderer
-to 30 or 60 fps; the `map` stream mode, now the Apple default, avoids it.
-
-## Run-to-run noise
-
-Repeated runs of the same configuration differ by up to 25% on this machine, so compare several runs. For reference,
-stock Forge on Java 8 (LWJGL 2, vanilla) measured 666 fps, in the same range as Lazarus on Java 25.
+On a driver with a fast legacy OpenGL path, the core renderer is slower on vanilla, where the frame is mostly the
+game's own CPU work, and faster with OptiFine. Stock Forge 1.8.9 on Java 8 measures in the same range as Lazarus on
+Java 25 (666 fps vanilla on LWJGL 2).
 
 ## Garbage collectors
 
-Two 40 second runs each, Java 25, LWJGL 3, vanilla:
+Java 25, LWJGL 3, vanilla, two 40 second runs each:
 
 | Collector | fps | p99 ms | p99.9 ms | 1% low fps |
 |-----------|-----|--------|----------|------------|
@@ -92,5 +71,5 @@ Two 40 second runs each, Java 25, LWJGL 3, vanilla:
 | ZGC | 690, 772 | 2.88, 2.45 | 8.1, 6.1 | 191, 260 |
 | Shenandoah | 771, 702 | 2.41, 2.78 | 8.2, 4.2 | 219, 274 |
 
-Parallel was best on every measure in both runs here, and is what Java 8 used by default. Two runs are not enough to
-change the default; this needs more runs and other machines first.
+Parallel, the collector Java 8 used by default, gave the best frame times here. To try it, add `-XX:+UseParallelGC`
+to the JVM arguments.

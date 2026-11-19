@@ -11,8 +11,8 @@ The switch has to cover the whole game: Minecraft, Forge, OptiFine and every mod
 
 ## What Lazarus provides
 
-The LWJGL 2 API surface used by Minecraft 1.8.9, Forge 11.15.1.2318, OptiFine HD U M5, paulscode's OpenAL library
-and Tenacity was measured class by class against LWJGL 3.4.3:
+The LWJGL 2 API surface used by Minecraft 1.8.9, Forge 11.15.1.2318, OptiFine HD U M5 and paulscode's OpenAL library
+was measured class by class against LWJGL 3.4.3:
 
 | | References |
 |---|---|
@@ -60,17 +60,15 @@ LWJGL 3 extracts its own natives from its natives jars; LWJGL 2's natives on `ja
 ## Tested
 
 | | Java 17 | Java 21 | Java 25 |
-|---|---|---|---|
+|---|:---:|:---:|:---:|
 | Windows: menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
 | Windows: OptiFine, world, splash screen | | | ✔ |
 | Windows: installed launcher profile, stock class path, no agent | | ✔ | ✔ |
-| Linux CI (Xvfb, software OpenGL): menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
+| Linux CI (Xvfb, software OpenGL): menu, Mixin 0.7 mod, world | ✔ | ✔ | ✔ |
 | macOS 26.5, Apple M2: menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
+| macOS: world, Retina screenshot, stock class path with no agent | | | ✔ |
 
-macOS is tested by hand: GitHub's hosted macOS runners are virtual machines without a usable OpenGL
-(`NSGL: Failed to find a suitable pixel format`), so CI cannot boot the game there.
-| macOS: world, Retina screenshot (2x, full window), stock class path with no agent | | | ✔ |
-
-Played by hand: on Windows (typing, menus, inventory, mouse look) and on macOS with a trackpad (typing, copy and
-paste, menus, mouse look, Cmd-Tab). LWJGL 2 does not start on Apple silicon (`liblwjgl.dylib` has no arm64 build),
-which is what the LWJGL 3 install is for.
+Played by hand on Windows (typing, menus, inventory, mouse look) and on macOS with a trackpad (typing, copy and
+paste, menus, mouse look, Cmd-Tab). macOS is tested by hand because GitHub's hosted macOS runners have no usable
+OpenGL. LWJGL 2 does not start on Apple silicon (`liblwjgl.dylib` has no arm64 build), which is what the LWJGL 3
+install is for.
