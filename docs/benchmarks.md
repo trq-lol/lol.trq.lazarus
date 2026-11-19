@@ -62,6 +62,9 @@ MacBook Air M2, macOS 26.5, Java 25.0.5, 30 to 60 second runs. On macOS the lega
 | core, `map` stream mode | no | 283 | 8.14 | 117 |
 | core, `map` stream mode | M5 | 568 | 5.51 | 162 |
 | core, `map`, F3 open | no | 259 | 8.49 | 105 |
+| core, after raw batching | no | 349 | 6.79 | 135 |
+| core, after raw batching | M5 | 554 | 5.91 | 158 |
+| core, after raw batching, F3 open | M5 | 507 | 5.74 | 158 |
 
 Apple's OpenGL waits for the GPU on `glBufferSubData` into a buffer still in use, which first held the core renderer
 to 30 or 60 fps; the `map` stream mode, now the Apple default, avoids it.
