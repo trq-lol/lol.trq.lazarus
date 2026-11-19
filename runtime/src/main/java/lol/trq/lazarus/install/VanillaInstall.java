@@ -166,6 +166,10 @@ public final class VanillaInstall {
                 Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
         try {
             Files.writeString(temp, content);
+            if (Files.exists(target)
+                    && temp.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(temp, Files.getPosixFilePermissions(target));
+            }
             try {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException e) {

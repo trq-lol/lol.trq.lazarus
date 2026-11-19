@@ -98,7 +98,7 @@ public final class Bootstrap {
      * @return the corrected entries
      */
     static List<String> fixClasspath(List<String> classpath, File self) {
-        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         String selfPath = self.getAbsolutePath();
         List<String> fixed = new ArrayList<>();
         fixed.add(selfPath);
@@ -126,7 +126,7 @@ public final class Bootstrap {
         boolean mac = System.getProperty("os.name", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .startsWith("mac");
-        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         return mac && lwjgl3 && !jvmArgs.contains(START_ON_FIRST_THREAD);
     }
 
@@ -139,7 +139,7 @@ public final class Bootstrap {
         boolean mac = System.getProperty("os.name", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .startsWith("mac");
-        boolean lwjgl3 = classpath().stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath().stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         if (mac && lwjgl3 && System.getProperty("java.awt.headless") == null) {
             System.setProperty("java.awt.headless", "true");
         }
@@ -148,6 +148,22 @@ public final class Bootstrap {
     /** Whether a class path jar is the Lazarus LWJGL 3 compatibility jar. */
     static boolean isLwjgl3Compat(String fileName) {
         return fileName.startsWith("lol.trq.lazarus-lwjgl3");
+    }
+
+    /** Whether a class path entry is the compatibility jar, by name or, for renamed copies, by its contents. */
+    static boolean isLwjgl3Compat(File entry) {
+        String name = entry.getName();
+        if (isLwjgl3Compat(name)) {
+            return true;
+        }
+        if (!name.endsWith(".jar") || !name.toLowerCase(java.util.Locale.ROOT).contains("lwjgl3") || !entry.isFile()) {
+            return false;
+        }
+        try (java.util.zip.ZipFile jar = new java.util.zip.ZipFile(entry)) {
+            return jar.getEntry("lol/trq/lazarus/lwjgl3/Window.class") != null;
+        } catch (java.io.IOException e) {
+            return false;
+        }
     }
 
     /** Whether a class path jar is LWJGL 2's core or natives jar, which LWJGL 3 replaces. */

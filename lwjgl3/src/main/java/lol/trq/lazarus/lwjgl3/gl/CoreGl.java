@@ -73,6 +73,11 @@ public final class CoreGl {
         long span(int first, int count) {
             return (long) (first + count - 1) * stride() + (long) size * typeSize(type);
         }
+
+        /** Whether {@code count} vertices from {@code first} lie inside the client buffer, as LWJGL 2 checked. */
+        boolean fits(int first, int count) {
+            return memory == null || (offset >= 0 && stride >= 0 && offset + span(first, count) <= memory.capacity());
+        }
     }
 
     private static Shader shader;
@@ -81,6 +86,7 @@ public final class CoreGl {
     private static int quadIboQuads;
 
     private static final Map<Long, Integer> contextVaos = new ConcurrentHashMap<>();
+    private static int contextVao;
     private static int boundVao = -1;
     private static int boundArrayBuffer;
     private static int gameArrayBuffer;
@@ -107,6 +113,9 @@ public final class CoreGl {
     private static final float[] lightDiffuse0 = {1, 1, 1}, lightDiffuse1 = {0, 0, 0};
     private static final float[] lightAmbient = {0.2f, 0.2f, 0.2f};
     private static final Map<Integer, Boolean> driverCaps = new HashMap<>();
+    /** 0 unknown, 1 off, 2 on, for the caps in {@link #capSlot}. */
+    private static final byte[] capState = new byte[7];
+
     private static final Map<Integer, Integer> shaderTypes = new ConcurrentHashMap<>();
     private static final Map<Integer, ProgramBuiltins> programBuiltins = new ConcurrentHashMap<>();
     private static final Mat4 modelViewProjection = new Mat4();
@@ -116,6 +125,7 @@ public final class CoreGl {
     private static final boolean DEBUG = Boolean.getBoolean("lazarus.gl.debug");
     private static boolean tintOn;
     private static final float[] tint = new float[4];
+    private static final float[] scratch = new float[16];
 
     private static final float[] color = {1, 1, 1, 1};
     private static final float[] normal = {0, 0, 1};
@@ -177,8 +187,10 @@ public final class CoreGl {
 
     /** Vertex arrays are not shared between contexts, so each context (the window, Forge's splash) gets its own. */
     static void bindContextVertexArray() {
-        long context = GLFW.glfwGetCurrentContext();
-        bindVertexArray(contextVaos.computeIfAbsent(context, k -> GL30C.glGenVertexArrays()));
+        if (contextVao == 0) {
+            contextVao = contextVaos.computeIfAbsent(GLFW.glfwGetCurrentContext(), k -> GL30C.glGenVertexArrays());
+        }
+        bindVertexArray(contextVao);
     }
 
     /**
@@ -186,10 +198,13 @@ public final class CoreGl {
      * capabilities and the viewport belong to each context, and Forge's splash screen renders on a second one.
      */
     public static void contextChanged() {
+        contextVao = 0;
+        activeTexture = 0;
         boundVao = -1;
         boundArrayBuffer = -1;
         gameArrayBuffer = 0;
         boundProgram = -1;
+        Arrays.fill(capState, (byte) 0);
         driverCaps.clear();
         Arrays.fill(boundTextures, 0);
         viewportKnown = false;
@@ -318,13 +333,14 @@ public final class CoreGl {
     /** Binds translated built-ins to the emulator's attribute locations and output 0, then links. */
     public static void glLinkProgram(int program) {
         flush();
-        for (String[] attribute : ShaderTranslator.ATTRIBUTES) {
-            GL20C.glBindAttribLocation(program, Integer.parseInt(attribute[1]), attribute[0]);
+        for (ShaderTranslator.Attribute attribute : ShaderTranslator.ATTRIBUTES) {
+            GL20C.glBindAttribLocation(program, attribute.location(), attribute.name());
         }
         GL30C.glBindFragDataLocation(program, 0, "lz_FragColor");
         GL30C.glBindFragDataLocation(program, 0, "lz_FragData");
         GL20C.glLinkProgram(program);
         programBuiltins.remove(program);
+        lastGameProgram = 0;
     }
 
     public static void glLinkProgramARB(int program) {
@@ -355,31 +371,31 @@ public final class CoreGl {
 
     public static void glMatrixMode(int mode) {
         flush();
-        if (record(() -> glMatrixMode(mode))) return;
+        if (recording != null && record(() -> glMatrixMode(mode))) return;
         matrixMode = mode;
     }
 
     public static void glLoadIdentity() {
         flush();
-        if (record(CoreGl::glLoadIdentity)) return;
+        if (recording != null && record(CoreGl::glLoadIdentity)) return;
         top().identity();
     }
 
     public static void glPushMatrix() {
         flush();
-        if (record(CoreGl::glPushMatrix)) return;
+        if (recording != null && record(CoreGl::glPushMatrix)) return;
         current().push();
     }
 
     public static void glPopMatrix() {
         flush();
-        if (record(CoreGl::glPopMatrix)) return;
+        if (recording != null && record(CoreGl::glPopMatrix)) return;
         current().pop();
     }
 
     public static void glTranslatef(float x, float y, float z) {
         flush();
-        if (record(() -> glTranslatef(x, y, z))) return;
+        if (recording != null && record(() -> glTranslatef(x, y, z))) return;
         top().translate(x, y, z);
     }
 
@@ -389,7 +405,7 @@ public final class CoreGl {
 
     public static void glScalef(float x, float y, float z) {
         flush();
-        if (record(() -> glScalef(x, y, z))) return;
+        if (recording != null && record(() -> glScalef(x, y, z))) return;
         top().scale(x, y, z);
     }
 
@@ -399,35 +415,48 @@ public final class CoreGl {
 
     public static void glRotatef(float angle, float x, float y, float z) {
         flush();
-        if (record(() -> glRotatef(angle, x, y, z))) return;
+        if (recording != null && record(() -> glRotatef(angle, x, y, z))) return;
         top().rotate(angle, x, y, z);
     }
 
     public static void glOrtho(double l, double r, double b, double t, double n, double f) {
         flush();
-        if (record(() -> glOrtho(l, r, b, t, n, f))) return;
+        if (recording != null && record(() -> glOrtho(l, r, b, t, n, f))) return;
         top().ortho(l, r, b, t, n, f);
     }
 
     public static void glMultMatrix(FloatBuffer m) {
         flush();
-        float[] a = new float[16];
-        m.get(m.position(), a);
-        if (record(() -> top().mul(a))) return;
-        top().mul(a);
+        if (recording != null) {
+            float[] a = new float[16];
+            m.get(m.position(), a);
+            if (record(() -> top().mul(a))) return;
+        }
+        m.get(m.position(), scratch, 0, 16);
+        top().mul(scratch);
+    }
+
+    public static void glLoadMatrix(FloatBuffer m) {
+        flush();
+        if (recording != null) {
+            float[] a = new float[16];
+            m.get(m.position(), a);
+            if (record(() -> System.arraycopy(a, 0, top().m, 0, 16))) return;
+        }
+        m.get(m.position(), top().m, 0, 16);
     }
 
     // ---- state
 
     public static void glEnable(int cap) {
         flush();
-        if (record(() -> glEnable(cap))) return;
+        if (recording != null && record(() -> glEnable(cap))) return;
         if (!setCap(cap, true)) toggle(cap, true);
     }
 
     public static void glDisable(int cap) {
         flush();
-        if (record(() -> glDisable(cap))) return;
+        if (recording != null && record(() -> glDisable(cap))) return;
         if (!setCap(cap, false)) toggle(cap, false);
     }
 
@@ -471,7 +500,25 @@ public final class CoreGl {
         }
     }
 
+    private static int capSlot(int cap) {
+        return switch (cap) {
+            case GL11C.GL_BLEND -> 0;
+            case GL11C.GL_DEPTH_TEST -> 1;
+            case GL11C.GL_CULL_FACE -> 2;
+            case GL11C.GL_SCISSOR_TEST -> 3;
+            case GL11C.GL_POLYGON_OFFSET_FILL -> 4;
+            case GL11C.GL_STENCIL_TEST -> 5;
+            case GL11C.GL_COLOR_LOGIC_OP -> 6;
+            default -> -1;
+        };
+    }
+
     private static boolean driverCap(int cap) {
+        int slot = capSlot(cap);
+        if (slot >= 0) {
+            if (capState[slot] == 0) capState[slot] = (byte) (GL11C.glIsEnabled(cap) ? 2 : 1);
+            return capState[slot] == 2;
+        }
         Boolean known = driverCaps.get(cap);
         if (known == null) {
             known = GL11C.glIsEnabled(cap);
@@ -482,7 +529,7 @@ public final class CoreGl {
 
     public static void glBindTexture(int target, int texture) {
         flush();
-        if (record(() -> glBindTexture(target, texture))) return;
+        if (recording != null && record(() -> glBindTexture(target, texture))) return;
         if (target == GL_TEXTURE_2D && activeTexture < boundTextures.length) {
             boundTextures[activeTexture] = texture;
         }
@@ -509,7 +556,7 @@ public final class CoreGl {
 
     public static void glAlphaFunc(int func, float ref) {
         flush();
-        if (record(() -> glAlphaFunc(func, ref))) return;
+        if (recording != null && record(() -> glAlphaFunc(func, ref))) return;
         alphaFunc = func;
         alphaRef = ref;
     }
@@ -524,7 +571,7 @@ public final class CoreGl {
      */
     public static void glTexEnvi(int target, int pname, int param) {
         flush();
-        if (record(() -> glTexEnvi(target, pname, param))) return;
+        if (recording != null && record(() -> glTexEnvi(target, pname, param))) return;
         if (target != GL_TEXTURE_ENV || activeTexture != 1) return;
         if (pname == GL_COMBINE_RGB) {
             tintOn = param == GL_INTERPOLATE;
@@ -536,13 +583,14 @@ public final class CoreGl {
     public static void glTexEnv(int target, int pname, FloatBuffer params) {
         flush();
         if (target != GL_TEXTURE_ENV || pname != GL_TEXTURE_ENV_COLOR) return;
-        float[] c = new float[4];
-        params.get(params.position(), c);
-        Runnable apply = () -> {
-            if (activeTexture == 1) System.arraycopy(c, 0, tint, 0, 4);
-        };
-        if (record(apply)) return;
-        apply.run();
+        if (recording != null) {
+            float[] c = new float[4];
+            params.get(params.position(), c);
+            if (record(() -> {
+                if (activeTexture == 1) System.arraycopy(c, 0, tint, 0, 4);
+            })) return;
+        }
+        if (activeTexture == 1) params.get(params.position(), tint, 0, 4);
     }
 
     public static void glTexGeni(int coord, int pname, int param) {}
@@ -557,13 +605,13 @@ public final class CoreGl {
 
     public static void glFogi(int pname, int param) {
         flush();
-        if (record(() -> glFogi(pname, param))) return;
+        if (recording != null && record(() -> glFogi(pname, param))) return;
         if (pname == GL_FOG_MODE) fogMode = param;
     }
 
     public static void glFogf(int pname, float param) {
         flush();
-        if (record(() -> glFogf(pname, param))) return;
+        if (recording != null && record(() -> glFogf(pname, param))) return;
         switch (pname) {
             case GL_FOG_START -> fogStart = param;
             case GL_FOG_END -> fogEnd = param;
@@ -579,40 +627,50 @@ public final class CoreGl {
             glFogf(pname, params.get(params.position()));
             return;
         }
-        float[] c = new float[4];
-        params.get(params.position(), c);
-        if (record(() -> System.arraycopy(c, 0, fogColor, 0, 4))) return;
-        System.arraycopy(c, 0, fogColor, 0, 4);
+        if (recording != null) {
+            float[] c = new float[4];
+            params.get(params.position(), c);
+            if (record(() -> System.arraycopy(c, 0, fogColor, 0, 4))) return;
+        }
+        params.get(params.position(), fogColor, 0, 4);
     }
 
     public static void glLight(int light, int pname, FloatBuffer params) {
         flush();
-        float[] v = new float[4];
-        params.get(params.position(), v, 0, Math.min(4, params.remaining()));
-        Runnable apply = () -> {
-            boolean first = light == GL_LIGHT0;
-            if (pname == GL_POSITION) {
-                modelView.top().transformDirNormalized(v[0], v[1], v[2], first ? lightDir0 : lightDir1);
-            } else if (pname == GL_DIFFUSE) {
-                System.arraycopy(v, 0, first ? lightDiffuse0 : lightDiffuse1, 0, 3);
-            }
-        };
-        if (record(apply)) return;
-        apply.run();
+        int n = Math.min(4, params.remaining());
+        if (recording != null) {
+            float[] v = new float[4];
+            params.get(params.position(), v, 0, n);
+            if (record(() -> applyLight(light, pname, v))) return;
+        }
+        params.get(params.position(), scratch, 0, n);
+        applyLight(light, pname, scratch);
+    }
+
+    private static void applyLight(int light, int pname, float[] v) {
+        boolean first = light == GL_LIGHT0;
+        if (pname == GL_POSITION) {
+            modelView.top().transformDirNormalized(v[0], v[1], v[2], first ? lightDir0 : lightDir1);
+        } else if (pname == GL_DIFFUSE) {
+            System.arraycopy(v, 0, first ? lightDiffuse0 : lightDiffuse1, 0, 3);
+        }
     }
 
     public static void glLightModel(int pname, FloatBuffer params) {
         flush();
         if (pname != GL_LIGHT_MODEL_AMBIENT) return;
-        float[] v = new float[4];
-        params.get(params.position(), v, 0, Math.min(4, params.remaining()));
-        if (record(() -> System.arraycopy(v, 0, lightAmbient, 0, 3))) return;
-        System.arraycopy(v, 0, lightAmbient, 0, 3);
+        int n = Math.min(3, params.remaining());
+        if (recording != null) {
+            float[] v = new float[3];
+            params.get(params.position(), v, 0, n);
+            if (record(() -> System.arraycopy(v, 0, lightAmbient, 0, 3))) return;
+        }
+        params.get(params.position(), lightAmbient, 0, n);
     }
 
     public static void glActiveTexture(int texture) {
         flush();
-        if (record(() -> glActiveTexture(texture))) return;
+        if (recording != null && record(() -> glActiveTexture(texture))) return;
         activeTexture = texture - GL13C.GL_TEXTURE0;
         GL13C.glActiveTexture(texture);
     }
@@ -661,7 +719,7 @@ public final class CoreGl {
 
     public static void glColor4f(float r, float g, float b, float a) {
         if (beginMode < 0 && rawCount > 0) flush();
-        if (beginMode < 0 && record(() -> glColor4f(r, g, b, a))) return;
+        if (beginMode < 0 && recording != null && record(() -> glColor4f(r, g, b, a))) return;
         color[0] = r;
         color[1] = g;
         color[2] = b;
@@ -678,7 +736,7 @@ public final class CoreGl {
 
     public static void glNormal3f(float x, float y, float z) {
         if (beginMode < 0 && rawCount > 0) flush();
-        if (beginMode < 0 && record(() -> glNormal3f(x, y, z))) return;
+        if (beginMode < 0 && recording != null && record(() -> glNormal3f(x, y, z))) return;
         normal[0] = x;
         normal[1] = y;
         normal[2] = z;
@@ -686,13 +744,14 @@ public final class CoreGl {
 
     public static void glTexCoord2f(float s, float t) {
         if (beginMode < 0 && rawCount > 0) flush();
+        if (beginMode < 0 && recording != null && record(() -> glTexCoord2f(s, t))) return;
         uv0[0] = s;
         uv0[1] = t;
     }
 
     public static void glMultiTexCoord2f(int target, float s, float t) {
         if (beginMode < 0 && rawCount > 0) flush();
-        if (beginMode < 0 && record(() -> glMultiTexCoord2f(target, s, t))) return;
+        if (beginMode < 0 && recording != null && record(() -> glMultiTexCoord2f(target, s, t))) return;
         float[] uv = target == GL13C.GL_TEXTURE1 ? uv1 : uv0;
         uv[0] = s;
         uv[1] = t;
@@ -743,7 +802,7 @@ public final class CoreGl {
         if (rawCount > 0) {
             flush();
         }
-        if (!appendTriangles(mode, count)) {
+        if (!appendTriangles(immediate, mode, count)) {
             flush();
             drawImmediate(immediate, count, mode);
         }
@@ -788,6 +847,10 @@ public final class CoreGl {
             layout[i * 3 + 2] = a.enabled ? a.type : 0;
         }
         long bytes = (long) count * stride;
+        long source = base + (long) first * stride;
+        if (first < 0 || stride <= 0 || bytes > RAW_LIMIT || base < 0 || source + bytes > memory.capacity()) {
+            return false;
+        }
         if (rawCount > 0
                 && (rawMode != mode
                         || rawStride != stride
@@ -803,11 +866,10 @@ public final class CoreGl {
             rawStride = stride;
             System.arraycopy(layout, 0, rawLayout, 0, layout.length);
         }
-        int at = rawCount * stride;
+        int at = Math.toIntExact((long) rawCount * stride);
         if (raw.capacity() < at + bytes) {
-            raw = MemoryUtil.memRealloc(raw, (int) Math.max(at + bytes, raw.capacity() * 2L));
+            raw = MemoryUtil.memRealloc(raw, Math.toIntExact(Math.max(at + bytes, raw.capacity() * 2L)));
         }
-        long source = base + (long) first * stride;
         if (memory.isDirect()) {
             MemoryUtil.memCopy(MemoryUtil.memAddress0(memory) + source, MemoryUtil.memAddress0(raw) + at, bytes);
         } else {
@@ -842,10 +904,6 @@ public final class CoreGl {
     }
 
     /** Appends a primitive to the batch as triangles; returns false for lines and points. */
-    private static boolean appendTriangles(int mode, int count) {
-        return appendTriangles(immediate, mode, count);
-    }
-
     private static boolean appendTriangles(float[] source, int mode, int count) {
         int triangles =
                 switch (mode) {
@@ -1011,6 +1069,14 @@ public final class CoreGl {
 
     public static void glDrawArrays(int mode, int first, int count) {
         if (count <= 0) return;
+        if (first < 0) {
+            throw new IllegalArgumentException("glDrawArrays first < 0: " + first);
+        }
+        for (Array a : attribArrays) {
+            if (a.enabled && !a.fits(first, count)) {
+                throw new IllegalArgumentException("glDrawArrays reads past the end of a client array");
+            }
+        }
         if (recording == null && appendRaw(mode, first, count)) {
             return;
         }
@@ -1101,6 +1167,36 @@ public final class CoreGl {
 
     /** Reads the enabled client arrays into the interleaved layout, for display list capture. */
     private static float[] gather(int first, int count) {
+        ByteBuffer[] readBack = new ByteBuffer[attribArrays.length];
+        ByteBuffer[] saved = new ByteBuffer[attribArrays.length];
+        long[] savedOffsets = new long[attribArrays.length];
+        for (int i = 0; i < attribArrays.length; i++) {
+            Array a = attribArrays[i];
+            if (a.enabled && a.memory == null && a.buffer != 0) {
+                readBack[i] = MemoryUtil.memAlloc(Math.toIntExact(a.span(first, count)));
+                bindArrayBuffer(a.buffer);
+                GL15C.glGetBufferSubData(GL15C.GL_ARRAY_BUFFER, a.offset, readBack[i]);
+                saved[i] = a.memory;
+                savedOffsets[i] = a.offset;
+                a.memory = readBack[i];
+                a.offset = 0;
+            }
+        }
+        try {
+            return gatherClient(first, count);
+        } finally {
+            for (int i = 0; i < attribArrays.length; i++) {
+                if (readBack[i] != null) {
+                    attribArrays[i].memory = saved[i];
+                    attribArrays[i].offset = savedOffsets[i];
+                    MemoryUtil.memFree(readBack[i]);
+                }
+            }
+            restoreArrayBuffer();
+        }
+    }
+
+    private static float[] gatherClient(int first, int count) {
         float[] out = new float[count * FLOATS];
         for (int v = 0; v < count; v++) {
             int o = v * FLOATS;
@@ -1175,7 +1271,7 @@ public final class CoreGl {
         flush();
         List<Runnable> ops = lists.get(list);
         if (ops == null) return;
-        if (record(() -> glCallList(list))) return;
+        if (recording != null && record(() -> glCallList(list))) return;
         for (int i = 0, n = ops.size(); i < n; i++) {
             ops.get(i).run();
         }
@@ -1275,7 +1371,9 @@ public final class CoreGl {
     private static void toggle(int cap, boolean on) {
         if (on) GL11C.glEnable(cap);
         else GL11C.glDisable(cap);
-        driverCaps.put(cap, on);
+        int slot = capSlot(cap);
+        if (slot >= 0) capState[slot] = (byte) (on ? 2 : 1);
+        else driverCaps.put(cap, on);
     }
 
     // ---- drawing
@@ -1298,7 +1396,7 @@ public final class CoreGl {
         switch (mode) {
             case GL_QUADS -> {
                 int quads = count / 4;
-                ensureQuadIndices(first / 4 + quads);
+                ensureQuadIndices(quads);
                 GL15C.glBindBuffer(GL15C.GL_ELEMENT_ARRAY_BUFFER, quadIbo);
                 GL32C.glDrawElementsBaseVertex(GL11C.GL_TRIANGLES, quads * 6, GL11C.GL_UNSIGNED_INT, 0L, first);
             }
@@ -1399,9 +1497,17 @@ public final class CoreGl {
         }
     }
 
-    /** Feeds a translated program of the game's the fixed-function built-ins it reads. */
+    /** Feeds one of the game's translated programs the fixed-function built-ins it reads. */
+    private static int lastGameProgram;
+
+    private static ProgramBuiltins lastBuiltins;
+
     private static void prepareGameProgram(int program) {
-        ProgramBuiltins b = programBuiltins.computeIfAbsent(program, ProgramBuiltins::of);
+        if (program != lastGameProgram) {
+            lastBuiltins = programBuiltins.computeIfAbsent(program, ProgramBuiltins::of);
+            lastGameProgram = program;
+        }
+        ProgramBuiltins b = lastBuiltins;
         Mat4 mv = modelView.top();
         Mat4 p = projection.top();
         b.u().mat4(b.modelView(), mv.m);

@@ -28,8 +28,8 @@ fixed lighting, and no GLSL 1.20. Lazarus emulates the parts Minecraft, Forge an
 | Property | Effect |
 |----------|--------|
 | `lazarus.gl=core` | Turns the core renderer on |
-| `lazarus.gl.debug=true` | Asks for a debug context and prints every driver-reported GL error with the Java call site |
-| `lazarus.gl.stream=subdata\|orphan\|frames\|map` | How per-draw vertex data is uploaded. Defaults: `map` on Apple drivers, `subdata` elsewhere |
+| `lazarus.gl.debug=true` | Asks for a debug context, prints every driver-reported GL error with the Java call site, and names fixed-function calls the emulator does not implement |
+| `lazarus.gl.stream=subdata\|map` | How per-draw vertex data is uploaded. Defaults: `map` on Apple drivers, `subdata` elsewhere |
 | `lazarus.swapInterval=<n>` | Re-applies a swap interval before every buffer swap, for diagnosing vsync |
 
 ## Status
@@ -41,7 +41,11 @@ Known gaps:
 
 - OptiFine shader packs are not supported yet.
 - Only the fixed-function features the game uses are emulated. A mod that relies on others (texture coordinate
-  generation, more than two lights, `glPolygonMode`) may draw incorrectly.
+  generation, more than two lights, `glPolygonMode`, `glCallLists`) may draw incorrectly; `lazarus.gl.debug`
+  names such calls.
+- `glPushAttrib` saves only the enables, alpha test and colour, not fog parameters or the damage tint.
+- The emulator's state is shared by the client thread and Forge's splash thread, which Forge keeps from drawing at
+  the same time.
 
 [benchmarks.md](benchmarks.md) has the numbers.
 

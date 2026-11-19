@@ -10,20 +10,22 @@ import java.util.regex.Pattern;
  * Rewrites legacy GLSL (1.10 to 1.50 compatibility, as written for Minecraft 1.8.9, Forge mods and OptiFine) into
  * GLSL 3.30 core. Fixed-function built-ins become {@code lz_*} attributes, varyings and uniforms that the emulator
  * binds and uploads; {@code attribute}/{@code varying} become {@code in}/{@code out}; the old texture functions
- * become {@code texture}. Shaders that already target 1.30 or later core GLSL pass through unchanged.
+ * become {@code texture}. Shaders that already target GLSL 3.30, or 1.50 core, pass through unchanged.
  */
 final class ShaderTranslator {
     static final int VERTEX = 0x8B31;
     static final int FRAGMENT = 0x8B30;
 
-    /** Attribute names and the emulator's vertex attribute locations. */
-    static final String[][] ATTRIBUTES = {
-        {"lz_Vertex", "0"},
-        {"Position", "0"},
-        {"lz_Color", "1"},
-        {"lz_MultiTexCoord0", "2"},
-        {"lz_MultiTexCoord1", "3"},
-        {"lz_Normal", "4"}
+    /** A vertex input of translated shaders and the emulator's attribute location for it. */
+    record Attribute(String name, int location) {}
+
+    static final Attribute[] ATTRIBUTES = {
+        new Attribute("lz_Vertex", Shader.POS),
+        new Attribute("Position", Shader.POS),
+        new Attribute("lz_Color", Shader.COLOR),
+        new Attribute("lz_MultiTexCoord0", Shader.UV0),
+        new Attribute("lz_MultiTexCoord1", Shader.UV1),
+        new Attribute("lz_Normal", Shader.NORMAL)
     };
 
     private static final Pattern VERSION =

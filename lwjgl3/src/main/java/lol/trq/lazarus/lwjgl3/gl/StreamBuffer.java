@@ -10,14 +10,11 @@ import org.lwjgl.opengl.GL32C;
 import org.lwjgl.system.MemoryUtil;
 
 /**
- * Vertex memory for per-draw data, in one of three modes ({@code -Dlazarus.gl.stream=subdata|orphan|frames}):
+ * Vertex memory for per-draw data, in one of two modes ({@code -Dlazarus.gl.stream=subdata|map}):
  *
  * <ul>
  *   <li>{@code subdata}: one ring, appended with {@code glBufferSubData} and orphaned when it wraps. Fastest on
  *       drivers that rename storage on their own (NVIDIA, Mesa).
- *   <li>{@code orphan}: fresh storage from {@code glBufferData} for every draw, so a write never waits on the GPU.
- *   <li>{@code frames}: one buffer per frame in flight, fenced at each buffer swap, appended with
- *       {@code glBufferSubData}.
  *   <li>{@code map}: one buffer per frame in flight, fenced at each buffer swap, written through an unsynchronized
  *       {@code glMapBufferRange}, so no upload call can make the driver wait.
  * </ul>
@@ -27,18 +24,11 @@ import org.lwjgl.system.MemoryUtil;
  */
 final class StreamBuffer {
     private static final int FRAMES = 3;
-
-    private enum Mode {
-        SUBDATA,
-        ORPHAN,
-        FRAMES,
-        MAP
-    }
-
+    private static final long INITIAL_CAPACITY = 4L << 20;
     private static final int MAP_ACCESS =
             GL30C.GL_MAP_WRITE_BIT | GL30C.GL_MAP_UNSYNCHRONIZED_BIT | GL30C.GL_MAP_INVALIDATE_RANGE_BIT;
 
-    private final Mode mode;
+    private final boolean map;
     private final int[] buffers;
     private final long[] fences = new long[FRAMES];
     private final long[] capacities;
@@ -47,24 +37,24 @@ final class StreamBuffer {
     private FloatBuffer staging = MemoryUtil.memAllocFloat(1 << 16);
 
     StreamBuffer() {
-        mode = chooseMode();
-        buffers = new int[mode == Mode.FRAMES || mode == Mode.MAP ? FRAMES : 1];
+        map = useMap();
+        buffers = new int[map ? FRAMES : 1];
         capacities = new long[buffers.length];
         for (int i = 0; i < buffers.length; i++) {
             buffers[i] = GL15C.glGenBuffers();
-            capacities[i] = 4L << 20;
+            capacities[i] = INITIAL_CAPACITY;
             CoreGl.bindArrayBuffer(buffers[i]);
             GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, capacities[i], GL15C.GL_STREAM_DRAW);
         }
     }
 
-    private static Mode chooseMode() {
+    private static boolean useMap() {
         String requested = System.getProperty("lazarus.gl.stream");
         if (requested != null) {
-            return Mode.valueOf(requested.toUpperCase(Locale.ROOT));
+            return requested.equalsIgnoreCase("map");
         }
         String vendor = GL11C.glGetString(GL11C.GL_VENDOR);
-        return vendor != null && vendor.toLowerCase(Locale.ROOT).contains("apple") ? Mode.MAP : Mode.SUBDATA;
+        return vendor != null && vendor.toLowerCase(Locale.ROOT).contains("apple");
     }
 
     /** {@return the buffer that the last {@link #reserve} bound} */
@@ -80,13 +70,9 @@ final class StreamBuffer {
     long reserve(long bytes) {
         bytes = (bytes + 63) & ~63L;
         CoreGl.bindArrayBuffer(buffers[frame]);
-        if (mode == Mode.ORPHAN) {
-            GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, bytes, GL15C.GL_STREAM_DRAW);
-            return 0;
-        }
         if (head + bytes > capacities[frame]) {
             while (capacities[frame] < bytes) {
-                capacities[frame] *= 2;
+                capacities[frame] = Math.max(INITIAL_CAPACITY, capacities[frame] * 2);
             }
             GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, capacities[frame], GL15C.GL_STREAM_DRAW);
             head = 0;
@@ -96,9 +82,9 @@ final class StreamBuffer {
         return at;
     }
 
-    /** Called before each buffer swap: fences this frame's buffer and moves to the next free one. */
+    /** Called before each buffer swap: in map mode, fences this frame's buffer and moves to the next free one. */
     void endFrame() {
-        if (mode != Mode.FRAMES && mode != Mode.MAP) {
+        if (!map) {
             return;
         }
         fences[frame] = GL32C.glFenceSync(GL32C.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -113,13 +99,15 @@ final class StreamBuffer {
 
     /** Copies {@code bytes} from native memory at {@code address} into the bound buffer at {@code offset}. */
     void write(long offset, long address, long bytes) {
-        if (mode == Mode.MAP) {
+        if (map) {
             long target = GL30C.nglMapBufferRange(GL15C.GL_ARRAY_BUFFER, offset, bytes, MAP_ACCESS);
-            MemoryUtil.memCopy(address, target, bytes);
-            GL15C.glUnmapBuffer(GL15C.GL_ARRAY_BUFFER);
-        } else {
-            GL15C.nglBufferSubData(GL15C.GL_ARRAY_BUFFER, offset, bytes, address);
+            if (target != 0) {
+                MemoryUtil.memCopy(address, target, bytes);
+                GL15C.glUnmapBuffer(GL15C.GL_ARRAY_BUFFER);
+                return;
+            }
         }
+        GL15C.nglBufferSubData(GL15C.GL_ARRAY_BUFFER, offset, bytes, address);
     }
 
     /** Copies the first {@code count} floats of {@code data} into the bound buffer at {@code offset}. */

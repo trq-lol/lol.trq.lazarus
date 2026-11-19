@@ -27,6 +27,37 @@ final class CoreGlPatch extends InvokeRewritePatch {
             "org/lwjgl/opengl/ARBVertexBufferObject",
             "org/lwjgl/opengl/ARBShaderObjects");
 
+    private static final boolean DEBUG = Boolean.getBoolean("lazarus.gl.debug");
+    /** Fixed-function GL11 calls with no core equivalent that the emulator does not implement. */
+    private static final Set<String> UNEMULATED_LEGACY = Set.of(
+            "glCallLists",
+            "glColor4ub",
+            "glVertex2d",
+            "glVertex3d",
+            "glVertex2i",
+            "glTexCoord2d",
+            "glRotated",
+            "glFrustum",
+            "glPolygonMode",
+            "glClipPlane",
+            "glRasterPos2f",
+            "glBitmap",
+            "glDrawPixels",
+            "glLightf",
+            "glMaterial",
+            "glMaterialf",
+            "glNormal3b",
+            "glPushClientAttrib",
+            "glPopClientAttrib",
+            "glInterleavedArrays",
+            "glArrayElement",
+            "glEdgeFlag",
+            "glIndexi",
+            "glListBase",
+            "glIsList");
+
+    private static final Set<String> REPORTED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private final Set<String> emulated;
 
     private CoreGlPatch(Set<String> emulated) {
@@ -96,6 +127,9 @@ final class CoreGlPatch extends InvokeRewritePatch {
         if (OWNERS.contains(o) && emulated.contains(m + desc)) {
             out.visitMethodInsn(op, EMULATOR, m, desc, false);
             return true;
+        }
+        if (DEBUG && o.equals("org/lwjgl/opengl/GL11") && UNEMULATED_LEGACY.contains(m) && REPORTED.add(m)) {
+            System.err.println("[lazarus] core renderer: " + m + " is not emulated and will fail on a core profile");
         }
         // Any other OpenGL call may depend on, or change, state that pending batched draws were built with.
         out.visitMethodInsn(Opcodes.INVOKESTATIC, EMULATOR, "flush", "()V", false);

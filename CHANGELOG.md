@@ -10,6 +10,8 @@ project uses [Semantic Versioning](https://semver.org/).
 - An opt-in OpenGL 4.1 core renderer, `-Dlazarus.gl=core` (LWJGL 3 only), the way to modern OpenGL on macOS. It
   emulates the fixed-function pipeline Minecraft, Forge and OptiFine use and translates their GLSL 1.20 shaders to
   GLSL 3.30 core. See [docs/core-renderer.md](docs/core-renderer.md).
+- `lol.trq.lazarus.lwjgl3.gl.GlState`, read-only access to the core renderer's matrices and bindings for render
+  libraries, answered without driver queries.
 - A frame time benchmark in the smoke mod, `-Dlazarus.smoke.bench=<seconds>`. See
   [docs/benchmarks.md](docs/benchmarks.md).
 - A shutdown watchdog: if the JVM is still shutting down 20 seconds after it began, Lazarus prints every thread's
@@ -17,6 +19,7 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The macOS relaunch now also recognises a renamed copy of the LWJGL 3 compatibility jar.
 - The relaunch no longer writes the game's program arguments, which include the launcher's session token, to the
   temporary argfile.
 - The installer keeps the first `launcher_profiles.json` backup, writes its JSON atomically and rejects version ids
