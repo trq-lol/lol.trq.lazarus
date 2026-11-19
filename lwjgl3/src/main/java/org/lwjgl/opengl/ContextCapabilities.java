@@ -1149,6 +1149,7 @@ public final class ContextCapabilities {
      * @param capabilities the current context's LWJGL 3 capabilities
      */
     public ContextCapabilities(GLCapabilities capabilities) {
+        int[] version = version();
         GL_AMD_blend_minmax_factor = read(capabilities, "GL_AMD_blend_minmax_factor");
         GL_AMD_conservative_depth = read(capabilities, "GL_AMD_conservative_depth");
         GL_AMD_debug_output = read(capabilities, "GL_AMD_debug_output");
@@ -1424,23 +1425,23 @@ public final class ContextCapabilities {
         GL_EXT_vertex_attrib_64bit = read(capabilities, "GL_EXT_vertex_attrib_64bit");
         GL_EXT_vertex_shader = read(capabilities, "GL_EXT_vertex_shader");
         GL_EXT_vertex_weighting = read(capabilities, "GL_EXT_vertex_weighting");
-        OpenGL11 = read(capabilities, "OpenGL11");
-        OpenGL12 = read(capabilities, "OpenGL12");
-        OpenGL13 = read(capabilities, "OpenGL13");
-        OpenGL14 = read(capabilities, "OpenGL14");
-        OpenGL15 = read(capabilities, "OpenGL15");
-        OpenGL20 = read(capabilities, "OpenGL20");
-        OpenGL21 = read(capabilities, "OpenGL21");
-        OpenGL30 = read(capabilities, "OpenGL30");
-        OpenGL31 = read(capabilities, "OpenGL31");
-        OpenGL32 = read(capabilities, "OpenGL32");
-        OpenGL33 = read(capabilities, "OpenGL33");
-        OpenGL40 = read(capabilities, "OpenGL40");
-        OpenGL41 = read(capabilities, "OpenGL41");
-        OpenGL42 = read(capabilities, "OpenGL42");
-        OpenGL43 = read(capabilities, "OpenGL43");
-        OpenGL44 = read(capabilities, "OpenGL44");
-        OpenGL45 = read(capabilities, "OpenGL45");
+        OpenGL11 = read(capabilities, "OpenGL11") || atLeast(version, 1, 1);
+        OpenGL12 = read(capabilities, "OpenGL12") || atLeast(version, 1, 2);
+        OpenGL13 = read(capabilities, "OpenGL13") || atLeast(version, 1, 3);
+        OpenGL14 = read(capabilities, "OpenGL14") || atLeast(version, 1, 4);
+        OpenGL15 = read(capabilities, "OpenGL15") || atLeast(version, 1, 5);
+        OpenGL20 = read(capabilities, "OpenGL20") || atLeast(version, 2, 0);
+        OpenGL21 = read(capabilities, "OpenGL21") || atLeast(version, 2, 1);
+        OpenGL30 = read(capabilities, "OpenGL30") || atLeast(version, 3, 0);
+        OpenGL31 = read(capabilities, "OpenGL31") || atLeast(version, 3, 1);
+        OpenGL32 = read(capabilities, "OpenGL32") || atLeast(version, 3, 2);
+        OpenGL33 = read(capabilities, "OpenGL33") || atLeast(version, 3, 3);
+        OpenGL40 = read(capabilities, "OpenGL40") || atLeast(version, 4, 0);
+        OpenGL41 = read(capabilities, "OpenGL41") || atLeast(version, 4, 1);
+        OpenGL42 = read(capabilities, "OpenGL42") || atLeast(version, 4, 2);
+        OpenGL43 = read(capabilities, "OpenGL43") || atLeast(version, 4, 3);
+        OpenGL44 = read(capabilities, "OpenGL44") || atLeast(version, 4, 4);
+        OpenGL45 = read(capabilities, "OpenGL45") || atLeast(version, 4, 5);
         GL_GREMEDY_frame_terminator = read(capabilities, "GL_GREMEDY_frame_terminator");
         GL_GREMEDY_string_marker = read(capabilities, "GL_GREMEDY_string_marker");
         GL_HP_occlusion_test = read(capabilities, "GL_HP_occlusion_test");
@@ -1527,6 +1528,25 @@ public final class ContextCapabilities {
         GL_SGIS_generate_mipmap = read(capabilities, "GL_SGIS_generate_mipmap");
         GL_SGIS_texture_lod = read(capabilities, "GL_SGIS_texture_lod");
         GL_SUN_slice_accum = read(capabilities, "GL_SUN_slice_accum");
+    }
+
+    /**
+     * The context's version from {@code GL_VERSION}. LWJGL 2 set the version flags from it; LWJGL 3 sets a version
+     * flag only when every function of that version is present, which Apple's 2.1 context does not satisfy for 1.3.
+     */
+    private static int[] version() {
+        try {
+            String v = GL11.glGetString(GL11.GL_VERSION);
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("(\\d+)\\.(\\d+)").matcher(v == null ? "" : v);
+            return m.find() ? new int[] {Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))} : new int[] {1, 1};
+        } catch (RuntimeException e) {
+            return new int[] {1, 1};
+        }
+    }
+
+    private static boolean atLeast(int[] version, int major, int minor) {
+        return version[0] > major || (version[0] == major && version[1] >= minor);
     }
 
     private static boolean read(GLCapabilities capabilities, String name) {

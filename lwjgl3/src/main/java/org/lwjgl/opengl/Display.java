@@ -267,12 +267,26 @@ public final class Display {
      */
     public static void setDisplayMode(DisplayMode newMode) {
         mode = newMode;
-        Window.setMode(newMode.getWidth(), newMode.getHeight(), newMode.getFrequency());
+        // Display modes are framebuffer pixels, like getWidth/getHeight; the window is sized in screen units.
+        float sx = Window.created() ? Window.contentScaleX() : 1f;
+        float sy = Window.created() ? Window.contentScaleY() : 1f;
+        Window.setMode(
+                Math.round(newMode.getWidth() / sx), Math.round(newMode.getHeight() / sy), newMode.getFrequency());
     }
 
     /** {@return the current mode} */
     public static DisplayMode getDisplayMode() {
-        return mode;
+        // In framebuffer pixels once the window exists: OptiFine copies this mode's size into the game's
+        // displayWidth/displayHeight, which must match getWidth/getHeight on high-DPI screens.
+        if (!Window.created()) {
+            return mode;
+        }
+        return new DisplayMode(
+                Window.framebufferWidth(),
+                Window.framebufferHeight(),
+                mode.getBitsPerPixel(),
+                mode.getFrequency(),
+                mode.isFullscreenCapable());
     }
 
     /** {@return the primary monitor's current mode} */
@@ -282,8 +296,24 @@ public final class Display {
         if (vm == null) {
             return mode;
         }
+        float[] scale = monitorScale();
         return new DisplayMode(
-                vm.width(), vm.height(), vm.redBits() + vm.greenBits() + vm.blueBits(), vm.refreshRate(), true);
+                Math.round(vm.width() * scale[0]),
+                Math.round(vm.height() * scale[1]),
+                vm.redBits() + vm.greenBits() + vm.blueBits(),
+                vm.refreshRate(),
+                true);
+    }
+
+    /** The primary monitor's pixels per screen unit; video modes are reported in screen units on macOS. */
+    private static float[] monitorScale() {
+        float[] x = new float[1];
+        float[] y = new float[1];
+        glfwGetMonitorContentScale(glfwGetPrimaryMonitor(), x, y);
+        if (org.lwjgl.LWJGLUtil.getPlatform() != org.lwjgl.LWJGLUtil.PLATFORM_MACOSX) {
+            return new float[] {1f, 1f};
+        }
+        return new float[] {x[0] > 0 ? x[0] : 1f, y[0] > 0 ? y[0] : 1f};
     }
 
     /** {@return the primary monitor's supported modes} */
@@ -296,8 +326,13 @@ public final class Display {
         DisplayMode[] out = new DisplayMode[modes.limit()];
         for (int i = 0; i < out.length; i++) {
             GLFWVidMode vm = modes.get(i);
+            float[] scale = monitorScale();
             out[i] = new DisplayMode(
-                    vm.width(), vm.height(), vm.redBits() + vm.greenBits() + vm.blueBits(), vm.refreshRate(), true);
+                    Math.round(vm.width() * scale[0]),
+                    Math.round(vm.height() * scale[1]),
+                    vm.redBits() + vm.greenBits() + vm.blueBits(),
+                    vm.refreshRate(),
+                    true);
         }
         return out;
     }
