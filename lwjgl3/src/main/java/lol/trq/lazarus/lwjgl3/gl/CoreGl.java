@@ -181,6 +181,20 @@ public final class CoreGl {
         bindVertexArray(contextVaos.computeIfAbsent(context, k -> GL30C.glGenVertexArrays()));
     }
 
+    /**
+     * Forgets the bindings cached for the previous context. Buffer, program, vertex array and texture bindings, enabled
+     * capabilities and the viewport belong to each context, and Forge's splash screen renders on a second one.
+     */
+    public static void contextChanged() {
+        boundVao = -1;
+        boundArrayBuffer = -1;
+        gameArrayBuffer = 0;
+        boundProgram = -1;
+        driverCaps.clear();
+        Arrays.fill(boundTextures, 0);
+        viewportKnown = false;
+    }
+
     static void bindVertexArray(int vao) {
         if (vao != boundVao) {
             GL30C.glBindVertexArray(vao);

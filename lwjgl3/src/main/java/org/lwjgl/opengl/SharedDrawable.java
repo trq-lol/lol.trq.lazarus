@@ -30,8 +30,10 @@ public final class SharedDrawable implements Drawable {
             throw new LWJGLException("GLFW could not create a shared context");
         }
         glfwMakeContextCurrent(window);
+        if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
         capabilities = GL.createCapabilities();
         glfwMakeContextCurrent(previous);
+        if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
         GL.setCapabilities(previous == Window.handle() ? Window.capabilities() : null);
     }
 
@@ -43,6 +45,7 @@ public final class SharedDrawable implements Drawable {
     @Override
     public void makeCurrent() {
         glfwMakeContextCurrent(window);
+        if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
         GL.setCapabilities(capabilities);
     }
 
@@ -50,6 +53,7 @@ public final class SharedDrawable implements Drawable {
     public void releaseContext() {
         if (isCurrent()) {
             glfwMakeContextCurrent(NULL);
+            if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
             GL.setCapabilities(null);
         }
     }

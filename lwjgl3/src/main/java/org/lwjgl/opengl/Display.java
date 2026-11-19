@@ -27,6 +27,7 @@ public final class Display {
         @Override
         public void makeCurrent() {
             glfwMakeContextCurrent(Window.handle());
+            if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
             GL.setCapabilities(Window.capabilities());
         }
 
@@ -34,6 +35,7 @@ public final class Display {
         public void releaseContext() {
             if (isCurrent()) {
                 glfwMakeContextCurrent(0L);
+                if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
                 GL.setCapabilities(null);
             }
         }
