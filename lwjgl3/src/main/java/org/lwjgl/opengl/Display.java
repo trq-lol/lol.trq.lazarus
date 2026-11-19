@@ -15,7 +15,8 @@ import org.lwjgl.glfw.GLFWVidMode;
  */
 public final class Display {
     private static DisplayMode mode = new DisplayMode(854, 480);
-    private static boolean wasResized;
+    private static int reportedWidth = 854;
+    private static int reportedHeight = 480;
 
     private static final Drawable DRAWABLE = new Drawable() {
         @Override
@@ -111,11 +112,7 @@ public final class Display {
         if (processMessages) {
             Window.processMessages();
         }
-        // Only the main thread consumes the resize flag. Forge's splash screen also calls update() from its own
-        // thread, and taking the flag there would hide the resize from the game.
-        if (Window.isMainThread()) {
-            wasResized = Window.takeResized();
-        }
+        Window.takeResized();
     }
 
     /** Processes window events. */
@@ -159,9 +156,22 @@ public final class Display {
         return true;
     }
 
-    /** {@return whether the window size changed in the last update} */
+    /**
+     * {@return whether the drawable size differs from the size this method last reported}
+     *
+     * <p>Compared rather than a one-shot flag: on macOS the Retina framebuffer appears only after the window is shown,
+     * during Minecraft's loading, before its game loop starts asking. A flag set then would be gone by the time the
+     * game (and OptiFine, which copies the size at init) looks; the comparison reports it on the first check.
+     */
     public static boolean wasResized() {
-        return wasResized;
+        int w = Window.framebufferWidth();
+        int h = Window.framebufferHeight();
+        if (w == reportedWidth && h == reportedHeight) {
+            return false;
+        }
+        reportedWidth = w;
+        reportedHeight = h;
+        return true;
     }
 
     /** {@return the drawable width in pixels} */
@@ -267,6 +277,10 @@ public final class Display {
      */
     public static void setDisplayMode(DisplayMode newMode) {
         mode = newMode;
+        if (!Window.created()) {
+            reportedWidth = newMode.getWidth();
+            reportedHeight = newMode.getHeight();
+        }
         // Display modes are framebuffer pixels, like getWidth/getHeight; the window is sized in screen units.
         float sx = Window.created() ? Window.contentScaleX() : 1f;
         float sy = Window.created() ? Window.contentScaleY() : 1f;
