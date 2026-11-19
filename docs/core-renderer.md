@@ -29,7 +29,7 @@ fixed lighting, and no GLSL 1.20. Lazarus emulates the parts Minecraft, Forge an
 |----------|--------|
 | `lazarus.gl=core` | Turns the core renderer on |
 | `lazarus.gl.debug=true` | Asks for a debug context and prints every driver-reported GL error with the Java call site |
-| `lazarus.gl.stream=subdata\|orphan\|frames\|map` | How per-draw vertex data is uploaded; see `StreamBuffer` |
+| `lazarus.gl.stream=subdata\|orphan\|frames\|map` | How per-draw vertex data is uploaded. Defaults: `map` on Apple drivers, `subdata` elsewhere |
 | `lazarus.swapInterval=<n>` | Re-applies a swap interval before every buffer swap, for diagnosing vsync |
 
 ## Status
@@ -40,7 +40,6 @@ with no driver errors; vanilla post-processing shaders; the damage tint.
 Known gaps:
 
 - OptiFine shader packs are not supported yet.
-- On macOS the frame rate is currently held to the display's refresh steps (60 or 30 fps); this is being worked on.
 - Only the fixed-function features the game uses are emulated. A mod that relies on others (texture coordinate
   generation, more than two lights, `glPolygonMode`) may draw incorrectly.
 

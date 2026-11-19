@@ -3,6 +3,25 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- An opt-in OpenGL 4.1 core renderer, `-Dlazarus.gl=core` (LWJGL 3 only), the way to modern OpenGL on macOS. It
+  emulates the fixed-function pipeline Minecraft, Forge and OptiFine use and translates their GLSL 1.20 shaders to
+  GLSL 3.30 core. See [docs/core-renderer.md](docs/core-renderer.md).
+- A frame time benchmark in the smoke mod, `-Dlazarus.smoke.bench=<seconds>`. See
+  [docs/benchmarks.md](docs/benchmarks.md).
+- A shutdown watchdog: if the JVM is still shutting down 20 seconds after it began, Lazarus prints every thread's
+  stack and halts it. `-Dlazarus.shutdownGrace=<seconds>` changes the wait.
+
+### Fixed
+
+- The relaunch no longer writes the game's program arguments, which include the launcher's session token, to the
+  temporary argfile.
+- The installer keeps the first `launcher_profiles.json` backup, writes its JSON atomically and rejects version ids
+  that are not plain names.
+
 ## [0.1.0] - 2026-11-18
 
 First release. Minecraft Forge 1.8.9 (11.15.1.2318) runs on Java 17, 21 and 25, with OptiFine HD U M5 and with mods

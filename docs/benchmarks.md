@@ -48,6 +48,24 @@ vertex arrays), the same scene gives:
 With OptiFine the core renderer is now within about 5% of the driver. On vanilla the frame is mostly the game's own
 CPU work (sky colour blending, chunk visibility), which a profile shows outside the emulator.
 
+Further work (draw batching, raw vertex batching, no driver queries) brought the core renderer on this machine to
+about 740 fps vanilla and about 2270 fps with OptiFine, ahead of the driver's own fixed-function path with OptiFine.
+
+### macOS
+
+MacBook Air M2, macOS 26.5, Java 25.0.5, 30 to 60 second runs. On macOS the legacy path is OpenGL 2.1.
+
+| Renderer | OptiFine | fps | p99 ms | 1% low fps |
+|----------|:--------:|----:|-------:|-----------:|
+| GL 2.1 (legacy) | no | 160 | 11.13 | 85 |
+| GL 2.1 (legacy) | M5 | 223 | 9.03 | 105 |
+| core, `map` stream mode | no | 283 | 8.14 | 117 |
+| core, `map` stream mode | M5 | 568 | 5.51 | 162 |
+| core, `map`, F3 open | no | 259 | 8.49 | 105 |
+
+Apple's OpenGL waits for the GPU on `glBufferSubData` into a buffer still in use, which first held the core renderer
+to 30 or 60 fps; the `map` stream mode, now the Apple default, avoids it.
+
 ## Run-to-run noise
 
 Repeated runs of the same configuration differ by up to 25% on this machine, so compare several runs. For reference,
