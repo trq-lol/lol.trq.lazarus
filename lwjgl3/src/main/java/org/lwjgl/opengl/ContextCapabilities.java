@@ -1549,7 +1549,21 @@ public final class ContextCapabilities {
         return version[0] > major || (version[0] == major && version[1] >= minor);
     }
 
+    /** Extensions the core renderer provides itself, on their core equivalents. */
+    private static final java.util.Set<String> CORE_EMULATED = java.util.Set.of(
+            "GL_ARB_shader_objects",
+            "GL_ARB_vertex_shader",
+            "GL_ARB_fragment_shader",
+            "GL_ARB_vertex_buffer_object",
+            "GL_ARB_framebuffer_object",
+            "GL_ARB_multitexture",
+            "GL_EXT_framebuffer_object",
+            "GL_EXT_blend_func_separate");
+
     private static boolean read(GLCapabilities capabilities, String name) {
+        if (lol.trq.lazarus.lwjgl3.Window.CORE && CORE_EMULATED.contains(name)) {
+            return true;
+        }
         try {
             Field field = GLCapabilities.class.getField(name);
             return field.getType() == boolean.class && field.getBoolean(capabilities);
