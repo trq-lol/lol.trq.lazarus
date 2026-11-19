@@ -66,6 +66,13 @@ MacBook Air M2, macOS 26.5, Java 25.0.5, 30 to 60 second runs. On macOS the lega
 | core, after raw batching | M5 | 554 | 5.91 | 158 |
 | core, after raw batching, F3 open | M5 | 507 | 5.74 | 158 |
 
+With the BSL 10.1.8 shader pack and OptiFine (30 s):
+
+| Renderer | fps | p99 ms | 1% low fps | Notes |
+|----------|----:|-------:|-----------:|-------|
+| GL 2.1 (legacy) | 26 | 53.1 | 17 | BSL's shadow program does not compile on Apple's GLSL 1.20 |
+| core | 81 | 20.9 | 31 | every BSL program, shadows included |
+
 Apple's OpenGL waits for the GPU on `glBufferSubData` into a buffer still in use, which first held the core renderer
 to 30 or 60 fps; the `map` stream mode, now the Apple default, avoids it.
 

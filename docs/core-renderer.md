@@ -35,11 +35,15 @@ fixed lighting, and no GLSL 1.20. Lazarus emulates the parts Minecraft, Forge an
 ## Status
 
 Tested: vanilla and OptiFine HD U M5 into a world on Windows (NVIDIA), Linux (Mesa, in CI) and macOS (Apple M2),
-with no driver errors; vanilla post-processing shaders; the damage tint.
+with no driver errors; vanilla post-processing shaders; the damage tint; the BSL shader pack on Windows and macOS.
+
+On macOS the core renderer runs shader packs that the legacy OpenGL 2.1 path cannot: Apple's 2.1 driver only accepts
+GLSL 1.20, so BSL's shadow program fails there, while on core every program compiles.
 
 Known gaps:
 
-- OptiFine shader packs are not supported yet.
+- OptiFine shader packs: BSL 10.1.8 is verified; other packs are untested. Shader packs need VBOs on and Fast
+  Render and antialiasing off, as OptiFine requires.
 - Only the fixed-function features the game uses are emulated. A mod that relies on others (texture coordinate
   generation, more than two lights, `glPolygonMode`) may draw incorrectly; `lazarus.gl.debug`
   names such calls.

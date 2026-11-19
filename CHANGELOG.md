@@ -3,6 +3,16 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- OptiFine shader packs on the core renderer, verified with BSL 10.1.8 on Windows and macOS. On macOS this is faster
+  than the legacy path and runs programs the legacy path cannot compile, shadows included. ARB and EXT extension
+  calls that a core profile does not expose are mapped to their core equivalents, OptiFine's extra vertex
+  attributes are emulated, and translated shaders get the compatibility alpha test.
+- `-PshaderPack=<zip>` in the development harness, and shader failure dumps with `lazarus.gl.debug`.
+
 ## [0.2.0] - 2026-11-19
 
 ### Added
