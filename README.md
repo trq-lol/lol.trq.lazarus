@@ -1,6 +1,6 @@
 # lol.trq.lazarus
 
-Runs Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and Log4Shell and Java4Shell fixes.
+A runtime for Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and security patches.
 
 Forge 1.8.9 was built for Java 8 and fails before its window opens on anything newer. Lazarus is a single jar that
 fixes that from the outside: a replacement launch entrypoint and a Java agent that patch Forge, FML, Mixin 0.7 and
