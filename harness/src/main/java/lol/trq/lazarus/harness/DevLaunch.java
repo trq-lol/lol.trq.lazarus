@@ -31,7 +31,7 @@ import java.util.zip.ZipFile;
  * <p>Arguments are {@code key=value} pairs: {@code java} (path to a java executable, required), {@code mode} ({@code
  * lazarus} or {@code stock}), {@code runtime} (the Lazarus runtime jar), {@code extra} (extra class path jars,
  * separated by the path separator), {@code mods} (jars copied into the mods directory), {@code cache}, {@code
- * gameDir}, {@code timeout} (seconds).
+ * gameDir}, {@code timeout} (seconds; 0, or {@code -Dlazarus.smoke.stay=true} in {@code jvmArgs}, waits forever).
  */
 public final class DevLaunch {
     static final String MC = "1.8.9";
@@ -139,7 +139,10 @@ public final class DevLaunch {
                 .directory(gameDir.toFile())
                 .inheritIO()
                 .start();
-        if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
+        boolean stay = opts.getOrDefault("jvmArgs", "").contains("-Dlazarus.smoke.stay=true");
+        if (stay || timeout <= 0) {
+            process.waitFor();
+        } else if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
             System.out.println("[harness] TIMEOUT after " + timeout + "s");
