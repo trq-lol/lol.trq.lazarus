@@ -62,14 +62,15 @@ Java 25 (666 fps vanilla on LWJGL 2).
 
 ## Garbage collectors
 
-Java 25, LWJGL 3, vanilla, two 40 second runs each:
+Java 25, vanilla, two runs per collector, mean frame rate:
 
-| Collector | fps | p99 ms | p99.9 ms | 1% low fps |
-|-----------|-----|--------|----------|------------|
-| G1 (default) | 802, 748 | 3.07, 2.68 | 14.2, 6.7 | 145, 222 |
-| Parallel | 810, 1036 | 2.42, 1.81 | 5.5, 4.1 | 266, 374 |
-| ZGC | 690, 772 | 2.88, 2.45 | 8.1, 6.1 | 191, 260 |
-| Shenandoah | 771, 702 | 2.41, 2.78 | 8.2, 4.2 | 219, 274 |
+| Collector | Windows, RTX 4070, LWJGL 3 legacy renderer | macOS, Apple M2, core renderer |
+|-----------|---:|---:|
+| G1 (default) | 775 fps | 356 fps |
+| Parallel | 923 fps | 375 fps |
+| ZGC | 731 fps | 348 fps |
+| Shenandoah | 737 fps | 349 fps |
 
-Parallel, the collector Java 8 used by default, gave the best frame times here. To try it, add `-XX:+UseParallelGC`
-to the JVM arguments.
+The differences are within run-to-run noise on the M2, and with OptiFine G1 and Parallel measure the same (525 and
+521 fps). ZGC uses two to three times the heap of the others. Lazarus keeps the JVM's default, G1;
+`-XX:+UseParallelGC` is a reasonable alternative on machines where it measures better.
