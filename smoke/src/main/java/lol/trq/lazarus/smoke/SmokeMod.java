@@ -165,7 +165,14 @@ public class SmokeMod {
             screenshot();
         }
         if (!Boolean.getBoolean("lazarus.smoke.stay")) {
-            FMLCommonHandler.instance().exitJava(0, false);
+            // Quit the way the menu does: calling System.exit inside a tick deadlocks with the shutdown hook, which
+            // waits on the client thread to disconnect from the integrated server.
+            try {
+                Object mc = minecraft();
+                mc.getClass().getMethod("func_71400_g").invoke(mc);
+            } catch (ReflectiveOperationException e) {
+                FMLCommonHandler.instance().exitJava(0, false);
+            }
         }
     }
 

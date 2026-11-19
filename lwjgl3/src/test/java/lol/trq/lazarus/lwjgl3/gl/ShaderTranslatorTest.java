@@ -126,4 +126,95 @@ class ShaderTranslatorTest {
         String v410 = "#version 410 core\nvoid main() {}";
         assertEquals(v410, ShaderTranslator.translate(ShaderTranslator.VERTEX, v410));
     }
+
+    @Test
+    void fogBuiltinsBecomeUniformsAndVaryings() {
+        String vsh = ShaderTranslator.translate(
+                ShaderTranslator.VERTEX, "void main() { gl_Position = ftransform(); gl_FogFragCoord = 1.0; }");
+        assertTrue(vsh.contains("out float lz_FogFragCoord;"), vsh);
+        String fsh = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "void main() { float f = clamp((gl_Fog.end - gl_FogFragCoord) * gl_Fog.scale, 0.0, 1.0);"
+                        + " gl_FragColor = mix(gl_Fog.color, vec4(1.0), f); }");
+        assertTrue(fsh.contains("uniform lz_FogParameters lz_Fog;"), fsh);
+        assertTrue(fsh.contains("in float lz_FogFragCoord;"), fsh);
+        assertTrue(fsh.contains("lz_Fog.end - lz_FogFragCoord"), fsh);
+        assertFalse(fsh.contains("gl_Fog"), fsh);
+    }
+
+    @Test
+    void gpuShader4FunctionsBecomeCore() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "#version 120\n#extension GL_EXT_gpu_shader4 : require\nuniform sampler2D t;\n"
+                        + "void main() { ivec2 s = textureSize2D(t, 0); gl_FragColor = texelFetch2D(t, s / 2, 0); }");
+        assertTrue(out.contains("textureSize(t, 0)"), out);
+        assertTrue(out.contains("texelFetch(t, s / 2, 0)"), out);
+        assertFalse(out.contains("#extension"), out);
+    }
+
+    @Test
+    void samplerNamedTextureIsRenamedAwayFromTheBuiltin() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "uniform sampler2D texture; varying vec2 uv;"
+                        + " void main() { gl_FragColor = texture2D(texture, uv) + texture2DGradARB(texture, uv, uv, uv); }");
+        assertTrue(out.contains("uniform sampler2D lz_texture;"), out);
+        assertTrue(out.contains("texture(lz_texture, uv)"), out);
+        assertTrue(out.contains("textureGrad(lz_texture, uv, uv, uv)"), out);
+    }
+
+    @Test
+    void fragmentShadersGetTheCompatibilityAlphaTest() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT, "uniform sampler2D t; void main() { gl_FragData[0] = vec4(1.0); }");
+        assertTrue(out.contains("void lz_main()"), out);
+        assertTrue(out.contains("uniform int lz_AlphaFunc;"), out);
+        assertTrue(out.contains("float a = lz_FragData[0].a;"), out);
+        assertTrue(out.contains("discard;"), out);
+        String vertex =
+                ShaderTranslator.translate(ShaderTranslator.VERTEX, "void main() { gl_Position = ftransform(); }");
+        assertFalse(vertex.contains("lz_AlphaFunc"), vertex);
+    }
+
+    @Test
+    void undefinedMacrosInConditionsBecomeZero() {
+        String src = "#define MC_VERSION 10809\n#if IRIS_VERSION >= 10800 && MC_VERSION > 0x10\n#endif\n"
+                + "#if !defined EXTRA && defined(OTHER) || FOO\n#elif BAR\n#endif\n";
+        String out = ShaderTranslator.zeroUndefinedMacros(src);
+        assertTrue(out.contains("#if 0 >= 10800 && MC_VERSION > 0x10"), out);
+        assertTrue(out.contains("#if !defined EXTRA && defined(OTHER) || 0"), out);
+        assertTrue(out.contains("#elif 0"), out);
+    }
+
+    @Test
+    void compatibilityProfileShadersAreTranslatedAtTheirVersion() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.VERTEX,
+                "#version 400 compatibility\nattribute vec4 a; void main() { gl_Position = a; }");
+        assertTrue(out.startsWith("#version 400 core\n"), out);
+        assertTrue(out.contains("in vec4 a;"), out);
+        assertFalse(out.contains("attribute"), out);
+    }
+
+    @Test
+    void conditionCommentsAreLeftAlone() {
+        String out = ShaderTranslator.zeroUndefinedMacros("#if FOO == 1 // FOO is 0 or 1\n#endif\n");
+        assertTrue(out.contains("#if 0 == 1 // FOO is 0 or 1"), out);
+    }
+
+    @Test
+    void conditionallyDefinedMacrosAreGuardedAroundTheChain() {
+        String N = "\n";
+        String src = "#ifdef FANCY" + N + "#define MODE 2" + N + "#endif" + N + "#if MODE == 1" + N + "a" + N
+                + "#elif MODE == 2" + N + "b" + N + "#endif" + N + "#ifdef MODE" + N + "c" + N + "#endif" + N;
+        String out = ShaderTranslator.zeroUndefinedMacros(src);
+        int guard = out.indexOf("#ifndef MODE" + N + "#define MODE 0" + N + "#define LZ_ZERO_MODE" + N + "#endif" + N
+                + "#if MODE == 1");
+        int cleanup =
+                out.indexOf("#elif MODE == 2" + N + "b" + N + "#endif" + N + "#ifdef LZ_ZERO_MODE" + N + "#undef MODE");
+        assertTrue(guard > 0, out);
+        assertTrue(cleanup > guard, out);
+        assertTrue(out.indexOf("#ifdef MODE" + N + "c") > cleanup, out);
+    }
 }

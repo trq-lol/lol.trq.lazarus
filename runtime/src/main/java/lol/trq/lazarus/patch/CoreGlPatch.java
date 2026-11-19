@@ -3,7 +3,9 @@ package lol.trq.lazarus.patch;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -17,6 +19,7 @@ import org.objectweb.asm.Opcodes;
  */
 final class CoreGlPatch extends InvokeRewritePatch {
     private static final String EMULATOR = "lol/trq/lazarus/lwjgl3/gl/CoreGl";
+    private static final String EXTENSIONS = "lol/trq/lazarus/lwjgl3/gl/CoreExtensions";
     private static final Set<String> OWNERS = Set.of(
             "org/lwjgl/opengl/GL11",
             "org/lwjgl/opengl/GL13",
@@ -25,12 +28,15 @@ final class CoreGlPatch extends InvokeRewritePatch {
             "org/lwjgl/opengl/GL30",
             "org/lwjgl/opengl/ARBMultitexture",
             "org/lwjgl/opengl/ARBVertexBufferObject",
-            "org/lwjgl/opengl/ARBShaderObjects");
+            "org/lwjgl/opengl/ARBShaderObjects",
+            "org/lwjgl/opengl/ARBVertexShader",
+            "org/lwjgl/opengl/ARBGeometryShader4",
+            "org/lwjgl/opengl/EXTBlendFuncSeparate",
+            "org/lwjgl/opengl/EXTFramebufferObject");
 
     private static final boolean DEBUG = Boolean.getBoolean("lazarus.gl.debug");
     /** Fixed-function GL11 calls with no core equivalent that the emulator does not implement. */
     private static final Set<String> UNEMULATED_LEGACY = Set.of(
-            "glCallLists",
             "glColor4ub",
             "glVertex2d",
             "glVertex3d",
@@ -58,9 +64,10 @@ final class CoreGlPatch extends InvokeRewritePatch {
 
     private static final Set<String> REPORTED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    private final Set<String> emulated;
+    /** Emulated name and descriptor, to the class that implements it. */
+    private final Map<String, String> emulated;
 
-    private CoreGlPatch(Set<String> emulated) {
+    private CoreGlPatch(Map<String, String> emulated) {
         this.emulated = emulated;
     }
 
@@ -75,25 +82,28 @@ final class CoreGlPatch extends InvokeRewritePatch {
         if (!enabled()) {
             return null;
         }
-        Set<String> methods = new HashSet<>();
-        try (InputStream in = ClassLoader.getSystemResourceAsStream(EMULATOR + ".class")) {
-            new ClassReader(in.readAllBytes())
-                    .accept(
-                            new ClassVisitor(Opcodes.ASM9) {
-                                @Override
-                                public MethodVisitor visitMethod(int access, String n, String d, String s, String[] e) {
-                                    int wanted = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC;
-                                    if ((access & wanted) == wanted && n.startsWith("gl")) {
-                                        methods.add(n + d);
+        Map<String, String> methods = new HashMap<>();
+        for (String owner : List.of(EXTENSIONS, EMULATOR)) {
+            try (InputStream in = ClassLoader.getSystemResourceAsStream(owner + ".class")) {
+                new ClassReader(in.readAllBytes())
+                        .accept(
+                                new ClassVisitor(Opcodes.ASM9) {
+                                    @Override
+                                    public MethodVisitor visitMethod(
+                                            int access, String n, String d, String s, String[] e) {
+                                        int wanted = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC;
+                                        if ((access & wanted) == wanted && n.startsWith("gl")) {
+                                            methods.put(n + d, owner);
+                                        }
+                                        return null;
                                     }
-                                    return null;
-                                }
-                            },
-                            ClassReader.SKIP_CODE);
-        } catch (IOException e) {
-            throw new IllegalStateException("cannot read the GL emulator", e);
+                                },
+                                ClassReader.SKIP_CODE);
+            } catch (IOException | NullPointerException e) {
+                throw new IllegalStateException("cannot read the GL emulator class " + owner, e);
+            }
         }
-        return new CoreGlPatch(Set.copyOf(methods));
+        return new CoreGlPatch(Map.copyOf(methods));
     }
 
     @Override
@@ -124,8 +134,9 @@ final class CoreGlPatch extends InvokeRewritePatch {
         if (op != Opcodes.INVOKESTATIC || !o.startsWith("org/lwjgl/opengl/")) {
             return false;
         }
-        if (OWNERS.contains(o) && emulated.contains(m + desc)) {
-            out.visitMethodInsn(op, EMULATOR, m, desc, false);
+        String target = OWNERS.contains(o) ? emulated.get(m + desc) : null;
+        if (target != null) {
+            out.visitMethodInsn(op, target, m, desc, false);
             return true;
         }
         if (DEBUG && o.equals("org/lwjgl/opengl/GL11") && UNEMULATED_LEGACY.contains(m) && REPORTED.add(m)) {

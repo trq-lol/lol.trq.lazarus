@@ -100,7 +100,10 @@ public final class DevLaunch {
             }
         }
         writeMutedOptions(gameDir);
+        // Screenshots and benchmarks need the world, not the pause menu that opens when the window loses focus.
+        setOption(gameDir.resolve("options.txt"), "pauseOnLostFocus", "false");
         deleteSmokeWorlds(gameDir);
+        selectShaderPack(gameDir, opts.getOrDefault("shaderPack", ""));
 
         List<String> command = new ArrayList<>();
         command.add(javaExe);
@@ -369,6 +372,36 @@ public final class DevLaunch {
                 }
             }
         }
+    }
+
+    /**
+     * Copies an OptiFine shader pack into the game folder and selects it, or turns shaders off when none is given.
+     * Shader packs also run with VBOs on, the path OptiFine's shaders are written for.
+     */
+    private static void selectShaderPack(Path gameDir, String pack) throws IOException {
+        Path packs = gameDir.resolve("shaderpacks");
+        Files.createDirectories(packs);
+        String selected = "OFF";
+        if (!pack.isBlank()) {
+            Path source = Path.of(pack);
+            Files.copy(source, packs.resolve(source.getFileName()), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            selected = source.getFileName().toString();
+            setOption(gameDir.resolve("options.txt"), "useVbo", "true");
+            // OptiFine refuses to load shaders with Fast Render or antialiasing on.
+            setOption(gameDir.resolve("optionsof.txt"), "ofFastRender", "false");
+            setOption(gameDir.resolve("optionsof.txt"), "ofAaLevel", "0");
+        }
+        setOption(gameDir.resolve("optionsshaders.txt"), "shaderPack", selected);
+    }
+
+    /** Sets {@code key:value} ({@code key=value} in optionsshaders.txt) in an options file, keeping other lines. */
+    private static void setOption(Path file, String key, String value) throws IOException {
+        String separator = file.getFileName().toString().equals("optionsshaders.txt") ? "=" : ":";
+        List<String> lines =
+                Files.exists(file) ? new java.util.ArrayList<>(Files.readAllLines(file)) : new java.util.ArrayList<>();
+        lines.removeIf(line -> line.startsWith(key + separator));
+        lines.add(key + separator + value);
+        Files.write(file, lines);
     }
 
     /** Removes the smoke mod's worlds, including the per-run ones older builds left behind. */

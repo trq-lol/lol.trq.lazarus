@@ -39,6 +39,7 @@ def registerRun = { String name, String mode, int javaVersion, boolean lwjgl3 = 
                 "gameDir=${layout.buildDirectory.dir("run/$name").get().asFile.absolutePath}",
                 "jvmArgs=${project.findProperty('jvmArgs') ?: ''}",
                 "timeout=${project.findProperty('timeout') ?: '300'}",
+                "shaderPack=${project.hasProperty('shaderPack') ? file(project.property('shaderPack')).absolutePath : ''}",
             ]
         }
     }
