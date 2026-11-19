@@ -48,17 +48,20 @@ final class ShaderTranslator {
      * @return GLSL 3.30 core source
      */
     static String translate(int type, String source) {
+        source = zeroUndefinedMacros(source);
+        int target = 330;
         Matcher version = VERSION.matcher(source);
         if (version.find()) {
             int number = Integer.parseInt(version.group(1));
             String profile = version.group(2) == null ? "" : version.group(2).trim();
-            if (number >= 330 || (number >= 150 && profile.equals("core"))) {
+            if (!profile.equals("compatibility") && (number >= 330 || (number >= 150 && profile.equals("core")))) {
                 return source;
             }
+            target = Math.max(330, number);
             source = version.replaceFirst("");
         }
         if (type != VERTEX && type != FRAGMENT) {
-            return source;
+            return "#version " + target + " core\n" + source;
         }
         boolean vertex = type == VERTEX;
         String body = EXTENSION.matcher(source).replaceAll("");
@@ -132,7 +135,7 @@ final class ShaderTranslator {
             decls.add("vec4 lz_shadow2D(sampler2DShadow s, vec3 c) { return vec4(texture(s, c)); }");
         }
 
-        StringBuilder out = new StringBuilder("#version 330 core\n");
+        StringBuilder out = new StringBuilder("#version " + target + " core\n");
         for (String decl : decls) {
             out.append(decl).append('\n');
         }
@@ -176,6 +179,47 @@ final class ShaderTranslator {
                 .append("            || (lz_AlphaFunc == 0x0204 && !(a > lz_AlphaRef))")
                 .append(" || (lz_AlphaFunc == 0x0205 && a == lz_AlphaRef)\n")
                 .append("            || (lz_AlphaFunc == 0x0206 && !(a >= lz_AlphaRef))) discard;\n}\n");
+    }
+
+    private static final Pattern DEFINE = Pattern.compile("(?m)^[ \\t]*#[ \\t]*define[ \\t]+(\\w+)");
+    private static final Pattern CONDITION = Pattern.compile("(?m)^([ \\t]*#[ \\t]*(?:if|elif)\\b)([^\\n]*)$");
+    private static final Pattern IDENTIFIER = Pattern.compile("\\b[A-Za-z_]\\w*");
+
+    /**
+     * Replaces identifiers in {@code #if}/{@code #elif} that are never defined with {@code 0}. Some drivers treat an
+     * undefined macro there as 0, as C does; Apple's rejects the line. Packs test macros only some loaders define.
+     */
+    static String zeroUndefinedMacros(String source) {
+        java.util.Set<String> defined = new java.util.HashSet<>();
+        Matcher d = DEFINE.matcher(source);
+        while (d.find()) {
+            defined.add(d.group(1));
+        }
+        Matcher condition = CONDITION.matcher(source);
+        StringBuilder out = new StringBuilder();
+        while (condition.find()) {
+            String expression = condition.group(2);
+            StringBuilder rewritten = new StringBuilder();
+            Matcher id = IDENTIFIER.matcher(expression);
+            int last = 0;
+            boolean afterDefined = false;
+            while (id.find()) {
+                String name = id.group();
+                rewritten.append(expression, last, id.start());
+                boolean keep = name.equals("defined")
+                        || afterDefined
+                        || defined.contains(name)
+                        || name.startsWith("GL_")
+                        || name.startsWith("__");
+                rewritten.append(keep ? name : "0");
+                afterDefined = name.equals("defined");
+                last = id.end();
+            }
+            rewritten.append(expression.substring(last));
+            condition.appendReplacement(out, Matcher.quoteReplacement(condition.group(1) + rewritten));
+        }
+        condition.appendTail(out);
+        return out.toString();
     }
 
     private static String word(String s, String from, String to) {

@@ -176,4 +176,24 @@ class ShaderTranslatorTest {
                 ShaderTranslator.translate(ShaderTranslator.VERTEX, "void main() { gl_Position = ftransform(); }");
         assertFalse(vertex.contains("lz_AlphaFunc"), vertex);
     }
+
+    @Test
+    void undefinedMacrosInConditionsBecomeZero() {
+        String src = "#define MC_VERSION 10809\n#if IRIS_VERSION >= 10800 && MC_VERSION > 0x10\n#endif\n"
+                + "#if !defined EXTRA && defined(OTHER) || FOO\n#elif BAR\n#endif\n";
+        String out = ShaderTranslator.zeroUndefinedMacros(src);
+        assertTrue(out.contains("#if 0 >= 10800 && MC_VERSION > 0x10"), out);
+        assertTrue(out.contains("#if !defined EXTRA && defined(OTHER) || 0"), out);
+        assertTrue(out.contains("#elif 0"), out);
+    }
+
+    @Test
+    void compatibilityProfileShadersAreTranslatedAtTheirVersion() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.VERTEX,
+                "#version 400 compatibility\nattribute vec4 a; void main() { gl_Position = a; }");
+        assertTrue(out.startsWith("#version 400 core\n"), out);
+        assertTrue(out.contains("in vec4 a;"), out);
+        assertFalse(out.contains("attribute"), out);
+    }
 }
