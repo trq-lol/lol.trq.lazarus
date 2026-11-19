@@ -67,6 +67,7 @@ public final class Lazarus {
         if (!LazarusAgent.installed()) {
             throw new IllegalStateException("the Lazarus agent is not installed; add -javaagent:<lazarus jar>");
         }
+        ShutdownWatchdog.install();
         Bootstrap.headlessAwtOnMacLwjgl3();
         LinuxNatives.prepare();
         if (Security.base64IntrinsicsEnabled()) {
