@@ -1364,6 +1364,33 @@ public final class CoreGl {
         }
     }
 
+    // ---- state for GlState; names avoid the gl prefix so the agent never redirects them
+
+    static float[] modelViewMatrix() {
+        return modelView.top().m;
+    }
+
+    static float[] projectionMatrix() {
+        return projection.top().m;
+    }
+
+    static int trackedProgram() {
+        return boundProgram;
+    }
+
+    static int trackedVertexArray() {
+        return boundVao;
+    }
+
+    static int trackedArrayBuffer() {
+        return gameArrayBuffer;
+    }
+
+    static boolean trackedViewport(int[] out) {
+        if (viewportKnown) System.arraycopy(viewport, 0, out, 0, 4);
+        return viewportKnown;
+    }
+
     /** Closes a frame; called before every buffer swap. */
     public static void endFrame() {
         flush();

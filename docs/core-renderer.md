@@ -44,3 +44,13 @@ Known gaps:
   generation, more than two lights, `glPolygonMode`) may draw incorrectly.
 
 [benchmarks.md](benchmarks.md) has the numbers.
+
+## For render libraries
+
+Libraries that draw with their own shaders on the core renderer should:
+
+- bind state through `GL15.glBindBuffer`, `GL20.glUseProgram` and `GL30.glBindVertexArray`, which the emulator
+  tracks, and draw through the `GL11C`/`GL32C` classes, which it leaves alone;
+- read matrices and bindings from `lol.trq.lazarus.lwjgl3.gl.GlState` instead of querying the driver.
+  `GlState.modelView`, `projection`, `program`, `vertexArray`, `arrayBuffer` and `viewport` answer from the
+  emulator's own state; a binding getter returns -1 when the state is unknown.
