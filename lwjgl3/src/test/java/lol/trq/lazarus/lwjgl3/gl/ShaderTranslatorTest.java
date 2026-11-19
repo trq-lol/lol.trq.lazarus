@@ -202,4 +202,19 @@ class ShaderTranslatorTest {
         String out = ShaderTranslator.zeroUndefinedMacros("#if FOO == 1 // FOO is 0 or 1\n#endif\n");
         assertTrue(out.contains("#if 0 == 1 // FOO is 0 or 1"), out);
     }
+
+    @Test
+    void conditionallyDefinedMacrosAreGuardedAroundTheChain() {
+        String N = "\n";
+        String src = "#ifdef FANCY" + N + "#define MODE 2" + N + "#endif" + N + "#if MODE == 1" + N + "a" + N
+                + "#elif MODE == 2" + N + "b" + N + "#endif" + N + "#ifdef MODE" + N + "c" + N + "#endif" + N;
+        String out = ShaderTranslator.zeroUndefinedMacros(src);
+        int guard = out.indexOf("#ifndef MODE" + N + "#define MODE 0" + N + "#define LZ_ZERO_MODE" + N + "#endif" + N
+                + "#if MODE == 1");
+        int cleanup =
+                out.indexOf("#elif MODE == 2" + N + "b" + N + "#endif" + N + "#ifdef LZ_ZERO_MODE" + N + "#undef MODE");
+        assertTrue(guard > 0, out);
+        assertTrue(cleanup > guard, out);
+        assertTrue(out.indexOf("#ifdef MODE" + N + "c") > cleanup, out);
+    }
 }

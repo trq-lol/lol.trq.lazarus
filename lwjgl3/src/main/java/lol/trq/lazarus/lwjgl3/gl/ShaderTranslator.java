@@ -182,12 +182,18 @@ final class ShaderTranslator {
     }
 
     private static final Pattern DEFINE = Pattern.compile("(?m)^[ \\t]*#[ \\t]*define[ \\t]+(\\w+)");
-    private static final Pattern CONDITION = Pattern.compile("(?m)^([ \\t]*#[ \\t]*(?:if|elif)\\b)([^\\n]*)$");
     private static final Pattern IDENTIFIER = Pattern.compile("\\b[A-Za-z_]\\w*");
 
+    private static final Pattern DIRECTIVE = Pattern.compile("^[ \\t]*#[ \\t]*(\\w+)(.*)$");
+
+    /** One {@code #if}...{@code #endif} chain: where it starts in the output, and the identifiers to guard. */
+    private record Chain(int start, java.util.Set<String> guarded) {}
+
     /**
-     * Replaces identifiers in {@code #if}/{@code #elif} that are never defined with {@code 0}. Some drivers treat an
-     * undefined macro there as 0, as C does; Apple's rejects the line. Packs test macros only some loaders define.
+     * Makes macro tests behave as on drivers that follow C, where an identifier that is not defined at that point
+     * counts as 0. Apple's driver rejects such lines instead. Identifiers never defined anywhere become 0; for those
+     * defined only on some paths, the whole {@code #if} chain is wrapped in a guard that defines them as 0 when they
+     * are undefined, and removes that definition again after the chain's {@code #endif}.
      */
     static String zeroUndefinedMacros(String source) {
         java.util.Set<String> defined = new java.util.HashSet<>();
@@ -195,34 +201,71 @@ final class ShaderTranslator {
         while (d.find()) {
             defined.add(d.group(1));
         }
-        Matcher condition = CONDITION.matcher(source);
-        StringBuilder out = new StringBuilder();
-        while (condition.find()) {
-            String line = condition.group(2);
-            int comment = commentStart(line);
-            String expression = line.substring(0, comment);
-            String trailing = line.substring(comment);
-            StringBuilder rewritten = new StringBuilder();
-            Matcher id = IDENTIFIER.matcher(expression);
-            int last = 0;
-            boolean afterDefined = false;
-            while (id.find()) {
-                String name = id.group();
-                rewritten.append(expression, last, id.start());
-                boolean keep = name.equals("defined")
-                        || afterDefined
-                        || defined.contains(name)
-                        || name.startsWith("GL_")
-                        || name.startsWith("__");
-                rewritten.append(keep ? name : "0");
-                afterDefined = name.equals("defined");
-                last = id.end();
+        String[] lines = source.split("\n", -1);
+        java.util.List<String> out = new java.util.ArrayList<>(lines.length);
+        java.util.ArrayDeque<Chain> chains = new java.util.ArrayDeque<>();
+        for (String line : lines) {
+            Matcher directive = DIRECTIVE.matcher(line);
+            String name = directive.matches() ? directive.group(1) : "";
+            switch (name) {
+                case "if", "ifdef", "ifndef" -> {
+                    chains.push(new Chain(out.size(), new java.util.LinkedHashSet<>()));
+                    out.add(name.equals("if") ? rewriteCondition(line, directive, defined, chains.peek()) : line);
+                }
+                case "elif" ->
+                    out.add(chains.isEmpty() ? line : rewriteCondition(line, directive, defined, chains.peek()));
+                case "endif" -> {
+                    out.add(line);
+                    Chain chain = chains.isEmpty() ? null : chains.pop();
+                    if (chain != null && !chain.guarded().isEmpty()) {
+                        java.util.List<String> before = new java.util.ArrayList<>();
+                        for (String id : chain.guarded()) {
+                            before.add("#ifndef " + id);
+                            before.add("#define " + id + " 0");
+                            before.add("#define LZ_ZERO_" + id);
+                            before.add("#endif");
+                            out.add("#ifdef LZ_ZERO_" + id);
+                            out.add("#undef " + id);
+                            out.add("#undef LZ_ZERO_" + id);
+                            out.add("#endif");
+                        }
+                        out.addAll(chain.start(), before);
+                    }
+                }
+                default -> out.add(line);
             }
-            rewritten.append(expression.substring(last)).append(trailing);
-            condition.appendReplacement(out, Matcher.quoteReplacement(condition.group(1) + rewritten));
         }
-        condition.appendTail(out);
-        return out.toString();
+        return String.join("\n", out);
+    }
+
+    private static String rewriteCondition(String line, Matcher directive, java.util.Set<String> defined, Chain chain) {
+        String rest = directive.group(2);
+        String head = line.substring(0, directive.start(2));
+        int comment = commentStart(rest);
+        String expression = rest.substring(0, comment);
+        StringBuilder rewritten = new StringBuilder(head);
+        Matcher id = IDENTIFIER.matcher(expression);
+        int last = 0;
+        boolean afterDefined = false;
+        while (id.find()) {
+            String name = id.group();
+            rewritten.append(expression, last, id.start());
+            boolean builtin = name.equals("defined") || name.startsWith("GL_") || name.startsWith("__");
+            if (builtin || afterDefined) {
+                rewritten.append(name);
+            } else if (defined.contains(name)) {
+                rewritten.append(name);
+                chain.guarded().add(name);
+            } else {
+                rewritten.append('0');
+            }
+            afterDefined = name.equals("defined");
+            last = id.end();
+        }
+        return rewritten
+                .append(expression.substring(last))
+                .append(rest.substring(comment))
+                .toString();
     }
 
     /** {@return where a {@code //} or {@code /*} comment starts in a preprocessor line, or its length} */
