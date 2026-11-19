@@ -201,7 +201,10 @@ public class SmokeMod {
                 + optifineVersion() + " mods=[" + mods.toString().trim() + "]");
     }
 
-    /** Creates and enters a default world named {@code lazarus-smoke} with a fixed seed. */
+    /**
+     * Creates and enters a default world named {@code lazarus-smoke} with a fixed seed. The harness deletes it before
+     * every run, so each run starts from the same fresh world and no worlds pile up.
+     */
     private static void launchWorld() throws ReflectiveOperationException {
         ClassLoader loader = SmokeMod.class.getClassLoader();
         Class<?> gameType = Class.forName("net.minecraft.world.WorldSettings$GameType", true, loader);
@@ -212,7 +215,7 @@ public class SmokeMod {
         Object settings = settingsClass
                 .getConstructor(long.class, gameType, boolean.class, boolean.class, worldType)
                 .newInstance(1891L, survival, true, false, defaultType);
-        String folder = "lazarus-smoke-" + System.nanoTime();
+        String folder = "lazarus-smoke";
         Object mc = minecraft();
         mc.getClass()
                 .getMethod("func_71371_a", String.class, String.class, settingsClass)

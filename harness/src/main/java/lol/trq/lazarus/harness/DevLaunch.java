@@ -100,6 +100,7 @@ public final class DevLaunch {
             }
         }
         writeMutedOptions(gameDir);
+        deleteSmokeWorlds(gameDir);
 
         List<String> command = new ArrayList<>();
         command.add(javaExe);
@@ -365,6 +366,25 @@ public final class DevLaunch {
                 Files.createDirectories(out.getParent());
                 try (InputStream in = zip.getInputStream(e)) {
                     Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    /** Removes the smoke mod's worlds, including the per-run ones older builds left behind. */
+    private static void deleteSmokeWorlds(Path gameDir) throws IOException {
+        Path saves = gameDir.resolve("saves");
+        if (!Files.isDirectory(saves)) {
+            return;
+        }
+        try (var worlds = Files.list(saves)) {
+            for (Path world : worlds.filter(p -> p.getFileName().toString().startsWith("lazarus-smoke"))
+                    .toList()) {
+                try (var tree = Files.walk(world)) {
+                    for (Path p :
+                            tree.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(p);
+                    }
                 }
             }
         }
