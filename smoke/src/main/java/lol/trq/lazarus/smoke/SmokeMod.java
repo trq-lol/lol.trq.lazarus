@@ -22,7 +22,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
  * given time, then prints frame time statistics on a {@code LAZARUS-BENCH} line.
  *
  * <p>With {@code -Dlazarus.smoke.hurt=true} the world stage spawns a sheep in front of the player and holds it in its
- * hurt state, so the screenshot shows the red damage tint.
+ * hurt state, so the screenshot shows the red damage tint. {@code -Dlazarus.smoke.postShader=<name>} turns on one of
+ * the game's post-processing shaders (for example {@code invert} or {@code blobs2}) when the world loads.
  *
  * <p>The mod is compiled against Forge only. Minecraft is reached by reflection with SRG names, the names Forge uses
  * at run time.
@@ -34,6 +35,7 @@ public class SmokeMod {
     private static final int WORLD_TICKS = Integer.getInteger("lazarus.smoke.worldTicks", 100);
     private static final boolean WORLD = Boolean.getBoolean("lazarus.smoke.world");
     private static final boolean SCREENSHOT = Boolean.getBoolean("lazarus.smoke.screenshot");
+    private static final String POST_SHADER = System.getProperty("lazarus.smoke.postShader");
     private static final boolean HURT = Boolean.getBoolean("lazarus.smoke.hurt");
     private static final int BENCH_SECONDS = Integer.getInteger("lazarus.smoke.bench", 0);
     private static final int BENCH_SETTLE_TICKS = Integer.getInteger("lazarus.smoke.benchSettleTicks", 300);
@@ -89,6 +91,9 @@ public class SmokeMod {
                 if (field(minecraft(), "field_71439_g") != null) {
                     stage = Stage.IN_WORLD;
                     ticks = 0;
+                    if (POST_SHADER != null) {
+                        loadPostShader(POST_SHADER);
+                    }
                 }
                 break;
             case IN_WORLD:
@@ -143,6 +148,15 @@ public class SmokeMod {
         Class<?> living = Class.forName("net.minecraft.entity.EntityLivingBase", true, loader);
         living.getField("field_70737_aN").setInt(sheep, 10);
         return tick >= WORLD_TICKS;
+    }
+
+    private static void loadPostShader(String name) throws ReflectiveOperationException {
+        ClassLoader loader = SmokeMod.class.getClassLoader();
+        Class<?> location = Class.forName("net.minecraft.util.ResourceLocation", true, loader);
+        Object id = location.getConstructor(String.class).newInstance("shaders/post/" + name + ".json");
+        Object renderer = field(minecraft(), "field_71460_t");
+        renderer.getClass().getMethod("func_175069_a", location).invoke(renderer, id);
+        System.out.println("LAZARUS-SMOKE post shader " + name + " loaded");
     }
 
     private void finish() {

@@ -107,6 +107,9 @@ public final class CoreGl {
     private static final float[] lightDiffuse0 = {1, 1, 1}, lightDiffuse1 = {0, 0, 0};
     private static final float[] lightAmbient = {0.2f, 0.2f, 0.2f};
     private static final Map<Integer, Boolean> driverCaps = new HashMap<>();
+    private static final Map<Integer, Integer> shaderTypes = new ConcurrentHashMap<>();
+    private static final Map<Integer, ProgramBuiltins> programBuiltins = new ConcurrentHashMap<>();
+    private static final Mat4 modelViewProjection = new Mat4();
     private static final int[] boundTextures = new int[32];
     private static boolean tintOn;
     private static final float[] tint = new float[4];
@@ -229,6 +232,86 @@ public final class CoreGl {
 
     public static void glUseProgramObjectARB(int program) {
         glUseProgram(program);
+    }
+
+    // ---- the game's own shaders, translated from legacy GLSL
+
+    /** Uniform locations of the fixed-function built-ins in one of the game's translated programs. */
+    private record ProgramBuiltins(
+            int modelView,
+            int projection,
+            int modelViewProjection,
+            int texture0,
+            int texture1,
+            int normal,
+            Uniforms u) {
+        static ProgramBuiltins of(int program) {
+            int[] locations = {
+                GL20C.glGetUniformLocation(program, "lz_ModelViewMatrix"),
+                GL20C.glGetUniformLocation(program, "lz_ProjectionMatrix"),
+                GL20C.glGetUniformLocation(program, "lz_ModelViewProjectionMatrix"),
+                GL20C.glGetUniformLocation(program, "lz_TextureMatrix[0]"),
+                GL20C.glGetUniformLocation(program, "lz_TextureMatrix[1]"),
+                GL20C.glGetUniformLocation(program, "lz_NormalMatrix")
+            };
+            int max = 0;
+            for (int l : locations) max = Math.max(max, l);
+            return new ProgramBuiltins(
+                    locations[0],
+                    locations[1],
+                    locations[2],
+                    locations[3],
+                    locations[4],
+                    locations[5],
+                    new Uniforms(max + 1));
+        }
+    }
+
+    public static int glCreateShader(int type) {
+        flush();
+        int shader = GL20C.glCreateShader(type);
+        shaderTypes.put(shader, type);
+        return shader;
+    }
+
+    public static int glCreateShaderObjectARB(int type) {
+        return glCreateShader(type);
+    }
+
+    public static void glShaderSource(int shader, ByteBuffer source) {
+        flush();
+        uploadSource(shader, MemoryUtil.memUTF8(source, source.remaining(), source.position()));
+    }
+
+    public static void glShaderSourceARB(int shader, ByteBuffer source) {
+        glShaderSource(shader, source);
+    }
+
+    public static void glShaderSourceARB(int shader, CharSequence source) {
+        flush();
+        uploadSource(shader, source.toString());
+    }
+
+    private static void uploadSource(int shader, String source) {
+        int end = source.indexOf('\0');
+        String text = end >= 0 ? source.substring(0, end) : source;
+        GL20C.glShaderSource(shader, ShaderTranslator.translate(shaderTypes.getOrDefault(shader, 0), text));
+    }
+
+    /** Binds translated built-ins to the emulator's attribute locations and output 0, then links. */
+    public static void glLinkProgram(int program) {
+        flush();
+        for (String[] attribute : ShaderTranslator.ATTRIBUTES) {
+            GL20C.glBindAttribLocation(program, Integer.parseInt(attribute[1]), attribute[0]);
+        }
+        GL30C.glBindFragDataLocation(program, 0, "lz_FragColor");
+        GL30C.glBindFragDataLocation(program, 0, "lz_FragData");
+        GL20C.glLinkProgram(program);
+        programBuiltins.remove(program);
+    }
+
+    public static void glLinkProgramARB(int program) {
+        glLinkProgram(program);
     }
 
     // ---- matrices
@@ -1121,6 +1204,10 @@ public final class CoreGl {
 
     /** Binds the fixed-function shader and uploads whatever state changed since the last draw. */
     static void prepareDraw() {
+        if (boundProgram != 0 && boundProgram != shader.program) {
+            prepareGameProgram(boundProgram);
+            return;
+        }
         Shader s = shader;
         glUseProgram(s.program);
         Uniforms u = s.uniforms;
@@ -1161,6 +1248,24 @@ public final class CoreGl {
         flush();
         if (stream != null) {
             stream.endFrame();
+        }
+    }
+
+    /** Feeds a translated program of the game's the fixed-function built-ins it reads. */
+    private static void prepareGameProgram(int program) {
+        ProgramBuiltins b = programBuiltins.computeIfAbsent(program, ProgramBuiltins::of);
+        Mat4 mv = modelView.top();
+        Mat4 p = projection.top();
+        b.u().mat4(b.modelView(), mv.m);
+        b.u().mat4(b.projection(), p.m);
+        if (b.modelViewProjection() >= 0) {
+            b.u().mat4(b.modelViewProjection(), modelViewProjection.set(p).mul(mv.m).m);
+        }
+        b.u().mat4(b.texture0(), textureMatrix[0].top().m);
+        b.u().mat4(b.texture1(), textureMatrix[1].top().m);
+        if (b.normal() >= 0) {
+            mv.normalMatrix(normalMatrix);
+            b.u().mat3(b.normal(), normalMatrix);
         }
     }
 
