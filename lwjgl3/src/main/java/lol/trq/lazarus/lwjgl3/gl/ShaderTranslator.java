@@ -48,7 +48,7 @@ final class ShaderTranslator {
      * @return GLSL 3.30 core source
      */
     static String translate(int type, String source) {
-        source = zeroUndefinedMacros(source);
+        source = zeroUndefinedMacros(source.replace("\r\n", "\n").replace('\r', '\n'));
         int target = 330;
         Matcher version = VERSION.matcher(source);
         if (version.find()) {
