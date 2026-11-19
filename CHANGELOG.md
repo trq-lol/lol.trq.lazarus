@@ -3,7 +3,7 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-18
 
 First release. Minecraft Forge 1.8.9 (11.15.1.2318) runs on Java 17, 21 and 25, with OptiFine HD U M5 and with mods
 that bundle Mixin 0.7.

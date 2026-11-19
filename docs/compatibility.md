@@ -40,3 +40,7 @@ Also tested:
   ([lwjgl3.md](lwjgl3.md)) runs on Apple silicon (tested on an M2 with macOS 26.5).
 - **Minecraft and Forge versions other than 1.8.9** are not supported.
 - **Servers** are not covered yet. Lazarus targets the client.
+- **macOS, LWJGL 3:** while another app has focus right after the game pauses (for example a launcher overlay such as
+  Raycast), the cursor can stay hidden over that app; it returns as soon as the game has focus again.
+- **macOS:** Apple gives Minecraft 1.8.9 an OpenGL 2.1 context, so OptiFine's VBO regions (which need OpenGL 3.1)
+  are unavailable. Its log line says "OpenGL 1.3", a typo in OptiFine for 3.1.
