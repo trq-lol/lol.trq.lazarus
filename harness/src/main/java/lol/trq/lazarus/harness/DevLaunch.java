@@ -114,10 +114,10 @@ public final class DevLaunch {
                     "--enable-native-access=ALL-UNNAMED",
                     "--sun-misc-unsafe-memory-access=allow",
                     "-XX:-UseBASE64Intrinsics"));
-            command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
-                    .filter(s -> !s.isBlank())
-                    .toList());
         }
+        command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
+                .filter(s -> !s.isBlank())
+                .toList());
         command.add("-cp");
         command.add(String.join(
                 File.pathSeparator, classpath.stream().map(Path::toString).toList()));
