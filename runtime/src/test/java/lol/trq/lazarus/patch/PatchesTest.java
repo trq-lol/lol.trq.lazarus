@@ -112,6 +112,15 @@ class PatchesTest {
     }
 
     @Test
+    void redirectLeavesClassesWithoutTheCallAlone() {
+        String name = "test/NoCall";
+        byte[] bytes = Bytecode.staticMethod(name, "java/lang/Object", "f", "()V", mv -> mv.visitInsn(Opcodes.RETURN));
+        RedirectPatch patch = new RedirectPatch(
+                "t", Set.of(name), Opcodes.INVOKESTATIC, "java/lang/String", "valueOf", "()V", HOOKS, "x");
+        assertSame(bytes, patch.apply(name, bytes));
+    }
+
+    @Test
     void redirectVirtualCallPassesReceiver() throws Exception {
         String name = "test/CallsLength";
         byte[] bytes = Bytecode.staticMethod(name, "java/lang/Object", "f", "(Ljava/lang/String;)I", mv -> {
@@ -157,7 +166,11 @@ class PatchesTest {
                 null,
                 "1.8");
         MethodVisitor mv = cw.visitMethod(
-                Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC, "get", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+                Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC,
+                "get",
+                "(Ljava/lang/String;)Ljava/lang/String;",
+                null,
+                new String[] {"java/io/IOException"});
         mv.visitCode();
         Label none = new Label();
         mv.visitVarInsn(Opcodes.ALOAD, 0);
@@ -180,6 +193,7 @@ class PatchesTest {
         assertEquals("1.7", get.invoke(null, "1.7"));
         assertEquals("1.8", get.invoke(null, "17"));
         assertNull(get.invoke(null, "banana"));
+        assertArrayEquals(new Class<?>[] {java.io.IOException.class}, get.getExceptionTypes());
     }
 
     @Test
@@ -208,6 +222,18 @@ class PatchesTest {
         byte[] patched = new NullReturnPatch("t", name, "lookup").apply(name, bytes);
         Method lookup = new Bytecode.Loader().define(name, patched).getMethod("lookup", String.class);
         assertNull(lookup.invoke(null, "ldap://example/x"));
+    }
+
+    @Test
+    void nullReturnLeavesNativeMethodsAlone() {
+        String name = "test/NativeLookup";
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null);
+        cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_NATIVE, "lookup", "()Ljava/lang/String;", null, null)
+                .visitEnd();
+        cw.visitEnd();
+        byte[] bytes = cw.toByteArray();
+        assertSame(bytes, new NullReturnPatch("t", name, "lookup").apply(name, bytes));
     }
 
     @Test
@@ -272,8 +298,8 @@ class PatchesTest {
     @Test
     void containsFindsNeedle() {
         byte[] hay = "abcorg/objectweb/asm/xyz".getBytes(StandardCharsets.ISO_8859_1);
-        assertTrue(AsmApiPatch.contains(hay, "org/objectweb/asm/".getBytes(StandardCharsets.ISO_8859_1)));
-        assertFalse(AsmApiPatch.contains(hay, "org/spongepowered".getBytes(StandardCharsets.ISO_8859_1)));
+        assertTrue(Bytes.contains(hay, "org/objectweb/asm/".getBytes(StandardCharsets.ISO_8859_1)));
+        assertFalse(Bytes.contains(hay, "org/spongepowered".getBytes(StandardCharsets.ISO_8859_1)));
         assertArrayEquals(new byte[0], new byte[0]);
     }
 

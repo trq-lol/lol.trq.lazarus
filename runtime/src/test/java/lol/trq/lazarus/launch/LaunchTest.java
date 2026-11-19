@@ -105,6 +105,12 @@ class LaunchTest {
     }
 
     @Test
+    void argfileEscapesLineBreaks() {
+        String nl = System.lineSeparator();
+        assertEquals("\"a\\nb\\rc\\td\"" + nl, Bootstrap.toArgfile(List.of("a\nb\rc\td")));
+    }
+
+    @Test
     void platformExclusionsCoverJdkPackagesOutsideJava() {
         for (String pkg : List.of("javax.", "jdk.", "com.sun.", "lol.trq.lazarus.agent.")) {
             assertTrue(Lazarus.PLATFORM_EXCLUSIONS.contains(pkg), pkg);

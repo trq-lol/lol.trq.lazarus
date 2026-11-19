@@ -58,7 +58,8 @@ support Lazarus.
 
 Tick the box in the installer (or pass `--lwjgl3`) to get a second profile that runs on LWJGL 3 instead of 1.8.9's
 LWJGL 2. That means GLFW for the window and input, correct high-DPI scaling, and native Apple silicon. On Apple
-silicon Macs this profile is selected by default. [docs/lwjgl3.md](docs/lwjgl3.md) covers what changes.
+silicon Macs this profile is selected by default. [docs/lwjgl3.md](docs/lwjgl3.md) covers what changes. With LWJGL 3 there is also an opt-in OpenGL 4.1 core renderer,
+the way to modern OpenGL on macOS: see [docs/core-renderer.md](docs/core-renderer.md).
 
 ## How it works
 
@@ -68,7 +69,7 @@ The jar has three parts.
 loader to `URLClassLoader` and so fails on Java 9 and later. Lazarus builds the same `LaunchClassLoader` and runs the
 tweaker chain under LaunchWrapper's contract, so FML, Mixin and OptiFine can't tell the difference.
 
-**Agent.** It opens the JDK to the game's class loaders, so the game (and nothing else) gets Java 8's reflection
+**Agent.** It opens the JDK to the class path and the game's class loader, so the game gets Java 8's reflection
 rules. It also patches classes as they load: Pack200, ASM 5 behaviour on ASM 9, `static final` writes and enum
 creation without `sun.reflect`, no `SecurityManager`, appends to the system class path, and Mixin 0.7's private copy
 of ASM 5. [docs/how-it-works.md](docs/how-it-works.md) lists every patch and the JDK change behind it.

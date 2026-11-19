@@ -17,6 +17,14 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
  * -Dlazarus.smoke.world=true} it then creates a singleplayer world, plays in it for a while and reports again. It
  * exits the game at the end unless {@code -Dlazarus.smoke.stay=true}.
  *
+ * <p>With {@code -Dlazarus.smoke.bench=<seconds>} the world stage becomes a benchmark: once the world has loaded and
+ * settled it turns the frame cap and vsync off, holds the player still and turns the camera one full circle over the
+ * given time, then prints frame time statistics on a {@code LAZARUS-BENCH} line.
+ *
+ * <p>With {@code -Dlazarus.smoke.hurt=true} the world stage spawns a sheep in front of the player and holds it in its
+ * hurt state, so the screenshot shows the red damage tint. {@code -Dlazarus.smoke.postShader=<name>} turns on one of
+ * the game's post-processing shaders (for example {@code invert} or {@code blobs2}) when the world loads.
+ *
  * <p>The mod is compiled against Forge only. Minecraft is reached by reflection with SRG names, the names Forge uses
  * at run time.
  */
@@ -27,6 +35,10 @@ public class SmokeMod {
     private static final int WORLD_TICKS = Integer.getInteger("lazarus.smoke.worldTicks", 100);
     private static final boolean WORLD = Boolean.getBoolean("lazarus.smoke.world");
     private static final boolean SCREENSHOT = Boolean.getBoolean("lazarus.smoke.screenshot");
+    private static final String POST_SHADER = System.getProperty("lazarus.smoke.postShader");
+    private static final boolean HURT = Boolean.getBoolean("lazarus.smoke.hurt");
+    private static final int BENCH_SECONDS = Integer.getInteger("lazarus.smoke.bench", 0);
+    private static final int BENCH_SETTLE_TICKS = Integer.getInteger("lazarus.smoke.benchSettleTicks", 300);
 
     private enum Stage {
         BOOTING,
@@ -38,6 +50,8 @@ public class SmokeMod {
 
     private Stage stage = Stage.BOOTING;
     private int ticks;
+    private final Bench bench = new Bench(BENCH_SECONDS);
+    private Object sheep;
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
@@ -64,7 +78,7 @@ public class SmokeMod {
                 if (++ticks >= MENU_TICKS) {
                     log4shellProbe();
                     report("menu");
-                    if (WORLD) {
+                    if (WORLD || BENCH_SECONDS > 0) {
                         stage = Stage.LOADING_WORLD;
                         ticks = 0;
                         launchWorld();
@@ -77,10 +91,24 @@ public class SmokeMod {
                 if (field(minecraft(), "field_71439_g") != null) {
                     stage = Stage.IN_WORLD;
                     ticks = 0;
+                    if (POST_SHADER != null) {
+                        loadPostShader(POST_SHADER);
+                    }
                 }
                 break;
             case IN_WORLD:
-                if (++ticks >= WORLD_TICKS) {
+                if (BENCH_SECONDS > 0) {
+                    if (++ticks == BENCH_SETTLE_TICKS) {
+                        bench.start(minecraft());
+                    }
+                    if (bench.done()) {
+                        bench.report(optifineVersion());
+                        finish();
+                    }
+                } else if (HURT && ++ticks > 0 && hurtSheep(ticks)) {
+                    report("world");
+                    finish();
+                } else if (!HURT && ++ticks >= WORLD_TICKS) {
                     report("world");
                     finish();
                 }
@@ -88,6 +116,47 @@ public class SmokeMod {
             default:
                 break;
         }
+    }
+
+    @SubscribeEvent
+    public void onRender(TickEvent.RenderTickEvent event) throws ReflectiveOperationException {
+        if (event.phase == TickEvent.Phase.START && stage == Stage.IN_WORLD) {
+            bench.frame(minecraft());
+        }
+    }
+
+    /** Spawns the sheep once, keeps it hurt, and returns true when it is time to report. */
+    private boolean hurtSheep(int tick) throws ReflectiveOperationException {
+        Object mc = minecraft();
+        Object world = field(mc, "field_71441_e");
+        Object player = field(mc, "field_71439_g");
+        ClassLoader loader = SmokeMod.class.getClassLoader();
+        if (sheep == null) {
+            Class<?> worldClass = Class.forName("net.minecraft.world.World", true, loader);
+            Class<?> sheepClass = Class.forName("net.minecraft.entity.passive.EntitySheep", true, loader);
+            sheep = sheepClass.getConstructor(worldClass).newInstance(world);
+            Class<?> entity = Class.forName("net.minecraft.entity.Entity", true, loader);
+            double yaw = Math.toRadians(entity.getField("field_70177_z").getFloat(player));
+            double x = entity.getField("field_70165_t").getDouble(player) - Math.sin(yaw) * 3;
+            double y = entity.getField("field_70163_u").getDouble(player);
+            double z = entity.getField("field_70161_v").getDouble(player) + Math.cos(yaw) * 3;
+            entity.getField("field_70125_A").setFloat(player, 20f);
+            entity.getMethod("func_70107_b", double.class, double.class, double.class)
+                    .invoke(sheep, x, y, z);
+            world.getClass().getMethod("func_73027_a", int.class, entity).invoke(world, -4242, sheep);
+        }
+        Class<?> living = Class.forName("net.minecraft.entity.EntityLivingBase", true, loader);
+        living.getField("field_70737_aN").setInt(sheep, 10);
+        return tick >= WORLD_TICKS;
+    }
+
+    private static void loadPostShader(String name) throws ReflectiveOperationException {
+        ClassLoader loader = SmokeMod.class.getClassLoader();
+        Class<?> location = Class.forName("net.minecraft.util.ResourceLocation", true, loader);
+        Object id = location.getConstructor(String.class).newInstance("shaders/post/" + name + ".json");
+        Object renderer = field(minecraft(), "field_71460_t");
+        renderer.getClass().getMethod("func_175069_a", location).invoke(renderer, id);
+        System.out.println("LAZARUS-SMOKE post shader " + name + " loaded");
     }
 
     private void finish() {
@@ -132,7 +201,10 @@ public class SmokeMod {
                 + optifineVersion() + " mods=[" + mods.toString().trim() + "]");
     }
 
-    /** Creates and enters a default world named {@code lazarus-smoke} with a fixed seed. */
+    /**
+     * Creates and enters a default world named {@code lazarus-smoke} with a fixed seed. The harness deletes it before
+     * every run, so each run starts from the same fresh world and no worlds pile up.
+     */
     private static void launchWorld() throws ReflectiveOperationException {
         ClassLoader loader = SmokeMod.class.getClassLoader();
         Class<?> gameType = Class.forName("net.minecraft.world.WorldSettings$GameType", true, loader);
@@ -143,7 +215,7 @@ public class SmokeMod {
         Object settings = settingsClass
                 .getConstructor(long.class, gameType, boolean.class, boolean.class, worldType)
                 .newInstance(1891L, survival, true, false, defaultType);
-        String folder = "lazarus-smoke-" + System.nanoTime();
+        String folder = "lazarus-smoke";
         Object mc = minecraft();
         mc.getClass()
                 .getMethod("func_71371_a", String.class, String.class, settingsClass)

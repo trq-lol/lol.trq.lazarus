@@ -27,6 +27,7 @@ public final class Display {
         @Override
         public void makeCurrent() {
             glfwMakeContextCurrent(Window.handle());
+            if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
             GL.setCapabilities(Window.capabilities());
         }
 
@@ -34,6 +35,7 @@ public final class Display {
         public void releaseContext() {
             if (isCurrent()) {
                 glfwMakeContextCurrent(0L);
+                if (lol.trq.lazarus.lwjgl3.Window.CORE) lol.trq.lazarus.lwjgl3.gl.CoreGl.contextChanged();
                 GL.setCapabilities(null);
             }
         }
@@ -108,7 +110,7 @@ public final class Display {
         if (!Window.created()) {
             return;
         }
-        glfwSwapBuffers(Window.handle());
+        Window.swap();
         if (processMessages) {
             Window.processMessages();
         }
@@ -123,7 +125,7 @@ public final class Display {
     /** Swaps buffers only. */
     public static void swapBuffers() {
         if (Window.created()) {
-            glfwSwapBuffers(Window.handle());
+            Window.swap();
         }
     }
 

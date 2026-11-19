@@ -31,7 +31,7 @@ import java.util.zip.ZipFile;
  * <p>Arguments are {@code key=value} pairs: {@code java} (path to a java executable, required), {@code mode} ({@code
  * lazarus} or {@code stock}), {@code runtime} (the Lazarus runtime jar), {@code extra} (extra class path jars,
  * separated by the path separator), {@code mods} (jars copied into the mods directory), {@code cache}, {@code
- * gameDir}, {@code timeout} (seconds).
+ * gameDir}, {@code timeout} (seconds; 0, or {@code -Dlazarus.smoke.stay=true} in {@code jvmArgs}, waits forever).
  */
 public final class DevLaunch {
     static final String MC = "1.8.9";
@@ -100,6 +100,7 @@ public final class DevLaunch {
             }
         }
         writeMutedOptions(gameDir);
+        deleteSmokeWorlds(gameDir);
 
         List<String> command = new ArrayList<>();
         command.add(javaExe);
@@ -114,10 +115,10 @@ public final class DevLaunch {
                     "--enable-native-access=ALL-UNNAMED",
                     "--sun-misc-unsafe-memory-access=allow",
                     "-XX:-UseBASE64Intrinsics"));
-            command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
-                    .filter(s -> !s.isBlank())
-                    .toList());
         }
+        command.addAll(List.of(opts.getOrDefault("jvmArgs", "").split(" ")).stream()
+                .filter(s -> !s.isBlank())
+                .toList());
         command.add("-cp");
         command.add(String.join(
                 File.pathSeparator, classpath.stream().map(Path::toString).toList()));
@@ -139,7 +140,10 @@ public final class DevLaunch {
                 .directory(gameDir.toFile())
                 .inheritIO()
                 .start();
-        if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
+        boolean stay = opts.getOrDefault("jvmArgs", "").contains("-Dlazarus.smoke.stay=true");
+        if (stay || timeout <= 0) {
+            process.waitFor();
+        } else if (!process.waitFor(timeout, TimeUnit.SECONDS)) {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
             System.out.println("[harness] TIMEOUT after " + timeout + "s");
@@ -362,6 +366,25 @@ public final class DevLaunch {
                 Files.createDirectories(out.getParent());
                 try (InputStream in = zip.getInputStream(e)) {
                     Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    /** Removes the smoke mod's worlds, including the per-run ones older builds left behind. */
+    private static void deleteSmokeWorlds(Path gameDir) throws IOException {
+        Path saves = gameDir.resolve("saves");
+        if (!Files.isDirectory(saves)) {
+            return;
+        }
+        try (var worlds = Files.list(saves)) {
+            for (Path world : worlds.filter(p -> p.getFileName().toString().startsWith("lazarus-smoke"))
+                    .toList()) {
+                try (var tree = Files.walk(world)) {
+                    for (Path p :
+                            tree.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        Files.deleteIfExists(p);
+                    }
                 }
             }
         }

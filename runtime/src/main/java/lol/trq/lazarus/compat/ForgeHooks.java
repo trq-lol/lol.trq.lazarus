@@ -2,6 +2,7 @@
 package lol.trq.lazarus.compat;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -77,7 +78,7 @@ public final class ForgeHooks {
                 && target == ClassLoader.getSystemClassLoader()) {
             try {
                 LazarusAgent.appendToSystemClassPath(new File(((URL) args[0]).toURI()));
-            } catch (java.io.IOException | URISyntaxException e) {
+            } catch (IOException | URISyntaxException e) {
                 throw new InvocationTargetException(e);
             }
             return null;

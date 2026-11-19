@@ -21,11 +21,11 @@ import lol.trq.lazarus.agent.LazarusAgent;
  * warnings are missing, the bootstrap starts a child JVM with the agent, a reordered class path and the flags, and
  * exits with its status.
  */
-final class Bootstrap {
+public final class Bootstrap {
     static final String RELAUNCHED = "lazarus.relaunched";
 
     /** JVM flags every Lazarus launch wants; ignored by JDKs that do not know them. */
-    static final List<String> JVM_FLAGS = List.of(
+    public static final List<String> JVM_FLAGS = List.of(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "--enable-native-access=ALL-UNNAMED",
             "--sun-misc-unsafe-memory-access=allow",
@@ -71,7 +71,6 @@ final class Bootstrap {
         command.add("-cp");
         command.add(String.join(File.pathSeparator, fixedClasspath));
         command.add(Lazarus.class.getName());
-        command.addAll(List.of(args));
 
         Path argfile = Files.createTempFile("lazarus-", ".args");
         argfile.toFile().deleteOnExit();
@@ -83,8 +82,10 @@ final class Bootstrap {
                         : "class path fixed (ASM 9 first, LWJGL 2 dropped when on LWJGL 3); ")
                 + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938); ")
                 + (needsFirstThread ? "-XstartOnFirstThread for GLFW on macOS" : ""));
-        Process child =
-                new ProcessBuilder(javaExecutable(), "@" + argfile).inheritIO().start();
+        // Program arguments carry the launcher's session token, so they go on the command line, never to disk.
+        List<String> process = new ArrayList<>(List.of(javaExecutable(), "@" + argfile));
+        process.addAll(List.of(args));
+        Process child = new ProcessBuilder(process).inheritIO().start();
         Runtime.getRuntime().addShutdownHook(new Thread(child::destroy, "lazarus-relaunch-reaper"));
         return Optional.of(child.waitFor());
     }
@@ -97,7 +98,7 @@ final class Bootstrap {
      * @return the corrected entries
      */
     static List<String> fixClasspath(List<String> classpath, File self) {
-        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         String selfPath = self.getAbsolutePath();
         List<String> fixed = new ArrayList<>();
         fixed.add(selfPath);
@@ -115,7 +116,7 @@ final class Bootstrap {
         return fixed;
     }
 
-    static final String START_ON_FIRST_THREAD = "-XstartOnFirstThread";
+    private static final String START_ON_FIRST_THREAD = "-XstartOnFirstThread";
 
     /**
      * Whether the JVM must be relaunched with {@code -XstartOnFirstThread}: on macOS, GLFW only works on the process's
@@ -125,7 +126,7 @@ final class Bootstrap {
         boolean mac = System.getProperty("os.name", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .startsWith("mac");
-        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath.stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         return mac && lwjgl3 && !jvmArgs.contains(START_ON_FIRST_THREAD);
     }
 
@@ -138,7 +139,7 @@ final class Bootstrap {
         boolean mac = System.getProperty("os.name", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .startsWith("mac");
-        boolean lwjgl3 = classpath().stream().anyMatch(e -> isLwjgl3Compat(new File(e).getName()));
+        boolean lwjgl3 = classpath().stream().anyMatch(e -> isLwjgl3Compat(new File(e)));
         if (mac && lwjgl3 && System.getProperty("java.awt.headless") == null) {
             System.setProperty("java.awt.headless", "true");
         }
@@ -149,13 +150,30 @@ final class Bootstrap {
         return fileName.startsWith("lol.trq.lazarus-lwjgl3");
     }
 
+    /** Whether a class path entry is the compatibility jar, by name or, for renamed copies, by its contents. */
+    static boolean isLwjgl3Compat(File entry) {
+        String name = entry.getName();
+        if (isLwjgl3Compat(name)) {
+            return true;
+        }
+        if (!name.endsWith(".jar") || !name.toLowerCase(java.util.Locale.ROOT).contains("lwjgl3") || !entry.isFile()) {
+            return false;
+        }
+        try (java.util.zip.ZipFile jar = new java.util.zip.ZipFile(entry)) {
+            return jar.getEntry("lol/trq/lazarus/lwjgl3/Window.class") != null;
+        } catch (java.io.IOException e) {
+            return false;
+        }
+    }
+
     /** Whether a class path jar is LWJGL 2's core or natives jar, which LWJGL 3 replaces. */
     static boolean isLwjgl2(String fileName) {
         return fileName.startsWith("lwjgl-2.") || fileName.startsWith("lwjgl-platform-2.");
     }
 
     /**
-     * Encodes arguments for a Java {@code @argfile}: each one quoted, with backslashes and quotes escaped.
+     * Encodes arguments for a Java {@code @argfile}: each one quoted, with backslashes, quotes and line breaks
+     * escaped.
      *
      * @param args the arguments
      * @return the file contents
@@ -164,7 +182,11 @@ final class Bootstrap {
         StringBuilder out = new StringBuilder();
         for (String arg : args) {
             out.append('"')
-                    .append(arg.replace("\\", "\\\\").replace("\"", "\\\""))
+                    .append(arg.replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\n", "\\n")
+                            .replace("\r", "\\r")
+                            .replace("\t", "\\t"))
                     .append('"')
                     .append(System.lineSeparator());
         }

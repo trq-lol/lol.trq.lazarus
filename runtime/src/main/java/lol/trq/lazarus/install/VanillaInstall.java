@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.stream.Stream;
+import lol.trq.lazarus.launch.Bootstrap;
 
 /**
  * Installs Lazarus into the official Minecraft Launcher's directory on top of an installed Forge 1.8.9.
@@ -33,11 +34,6 @@ public final class VanillaInstall {
 
     static final int RUNTIME_MAJOR = 21;
     static final String MAIN_CLASS = "lol.trq.lazarus.launch.Lazarus";
-    static final List<String> JVM_FLAGS = List.of(
-            "-XX:+IgnoreUnrecognizedVMOptions",
-            "--enable-native-access=ALL-UNNAMED",
-            "--sun-misc-unsafe-memory-access=allow",
-            "-XX:-UseBASE64Intrinsics");
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -122,6 +118,9 @@ public final class VanillaInstall {
      * @throws IOException if a file cannot be read or written
      */
     public Result install(String forgeId, String profileName, int maxMemoryMb, boolean lwjgl3) throws IOException {
+        if (!forgeId.matches("[A-Za-z0-9._-]+") || forgeId.contains("..")) {
+            throw new IOException("Not a version id: " + forgeId);
+        }
         Path forgeJson = minecraftDir.resolve("versions").resolve(forgeId).resolve(forgeId + ".json");
         if (!Files.isRegularFile(forgeJson)) {
             throw new IOException("Forge version " + forgeId + " is not installed in " + minecraftDir
@@ -142,25 +141,43 @@ public final class VanillaInstall {
         if (lwjgl3) {
             addLwjgl3(json.getAsJsonArray("libraries"));
         }
-        Files.writeString(versionJson, GSON.toJson(json));
+        writeAtomically(versionJson, GSON.toJson(json));
 
         Path profiles = minecraftDir.resolve("launcher_profiles.json");
         JsonObject root = Files.isRegularFile(profiles)
                 ? JsonParser.parseString(Files.readString(profiles)).getAsJsonObject()
                 : new JsonObject();
-        if (Files.isRegularFile(profiles)) {
-            Files.copy(
-                    profiles,
-                    profiles.resolveSibling("launcher_profiles.json.lazarus-backup"),
-                    StandardCopyOption.REPLACE_EXISTING);
+        Path backup = profiles.resolveSibling("launcher_profiles.json.lazarus-backup");
+        if (Files.isRegularFile(profiles) && !Files.exists(backup)) {
+            Files.copy(profiles, backup);
         }
         if (!root.has("profiles")) {
             root.add("profiles", new JsonObject());
         }
         String profileKey = (lwjgl3 ? "lazarus-lwjgl3-" : "lazarus-") + forgeId;
         root.getAsJsonObject("profiles").add(profileKey, profile(profileName, versionId, library, maxMemoryMb));
-        Files.writeString(profiles, GSON.toJson(root));
+        writeAtomically(profiles, GSON.toJson(root));
         return new Result(versionId, profileKey, library, versionJson);
+    }
+
+    /** Writes through a temporary file in the same directory, so a crash never leaves a half-written file. */
+    private static void writeAtomically(Path target, String content) throws IOException {
+        Path temp =
+                Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temp, content);
+            if (Files.exists(target)
+                    && temp.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(temp, Files.getPosixFilePermissions(target));
+            }
+            try {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 
     JsonObject versionJson(String versionId, String forgeId, String libraryPath, Path library) throws IOException {
@@ -268,7 +285,7 @@ public final class VanillaInstall {
         if (agentPath.chars().noneMatch(Character::isWhitespace)) {
             args.add("-javaagent:" + agentPath);
         }
-        args.addAll(JVM_FLAGS);
+        args.addAll(Bootstrap.JVM_FLAGS);
         JsonObject profile = new JsonObject();
         profile.addProperty("name", name);
         profile.addProperty("type", "custom");

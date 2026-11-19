@@ -22,6 +22,9 @@ import org.lwjgl.system.MemoryStack;
  * thread). Buffer swaps and context switches work from any thread, which Forge's splash screen relies on.
  */
 public final class Window {
+    /** Whether {@code -Dlazarus.gl=core} asked for a core context with the fixed-function emulator. */
+    public static final boolean CORE = "core".equals(System.getProperty("lazarus.gl"));
+
     private static long handle = NULL;
     private static Thread mainThread;
     private static GLCapabilities capabilities;
@@ -34,6 +37,9 @@ public final class Window {
     private static boolean fullscreen;
     private static boolean resizable;
     private static boolean vsync;
+    /** {@code -Dlazarus.swapInterval=<n>} re-applies a swap interval before every swap, for diagnosing vsync. */
+    private static final int FORCED_SWAP_INTERVAL = Integer.getInteger("lazarus.swapInterval", -1);
+
     private static List<ByteBuffer> icons = List.of();
 
     private static int framebufferWidth;
@@ -85,6 +91,7 @@ public final class Window {
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, debug ? GLFW_TRUE : GLFW_FALSE);
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
         glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+        contextHints();
 
         long monitor = fullscreen ? glfwGetPrimaryMonitor() : NULL;
         handle = glfwCreateWindow(width, height, title, monitor, NULL);
@@ -96,6 +103,9 @@ public final class Window {
         }
         glfwMakeContextCurrent(handle);
         capabilities = GL.createCapabilities();
+        if (CORE) {
+            lol.trq.lazarus.lwjgl3.gl.CoreGl.init();
+        }
         glfwSwapInterval(vsync ? 1 : 0);
         applyIcons();
 
@@ -130,6 +140,19 @@ public final class Window {
         focused = glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
     }
 
+    /** Requests a core 4.1 context when the emulator is on; shared contexts must match the window's. */
+    public static void contextHints() {
+        if (CORE) {
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+            if (Boolean.getBoolean("lazarus.gl.debug")) {
+                glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+            }
+        }
+    }
+
     /** Destroys the window. */
     public static synchronized void destroy() {
         if (handle == NULL) {
@@ -145,8 +168,22 @@ public final class Window {
         if (handle == NULL) {
             return;
         }
-        glfwSwapBuffers(handle);
+        swap();
         processMessages();
+    }
+
+    /** Swaps the window's buffers, first closing the emulator's frame when the core renderer is on. */
+    public static void swap() {
+        if (handle == NULL) {
+            return;
+        }
+        if (CORE) {
+            lol.trq.lazarus.lwjgl3.gl.CoreGl.endFrame();
+        }
+        if (FORCED_SWAP_INTERVAL >= 0) {
+            glfwSwapInterval(FORCED_SWAP_INTERVAL);
+        }
+        glfwSwapBuffers(handle);
     }
 
     /** Processes window events, only on the main thread; GLFW forbids it elsewhere. */

@@ -37,3 +37,9 @@ and the full stack trace.
 
 Java 24+ warns about LWJGL 2's use of `Unsafe`. Add `--sun-misc-unsafe-memory-access=allow` (and, for Java 17 and 21
 compatibility, `-XX:+IgnoreUnrecognizedVMOptions`) to the JVM arguments. The installer does this.
+
+## The game freezes while quitting
+
+Lazarus halts a JVM whose shutdown is still running 20 seconds after it began, and first prints every thread's
+stack to the log under `[Lazarus] shutdown has not finished`. If you see that block, please open an issue with it.
+`-Dlazarus.shutdownGrace=<seconds>` changes the wait; `0` turns the watchdog off.

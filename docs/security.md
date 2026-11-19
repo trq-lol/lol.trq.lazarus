@@ -42,8 +42,12 @@ already contain the fix. Still update to a fixed JDK when your distribution ship
 
 ## What Lazarus does not change
 
-- Mods run with full access to the JVM, as on Java 8. Lazarus opens the JDK only to the game's own class loaders,
-  but anything loaded there is trusted.
+- Mods run with full access to the JVM, as on Java 8. Lazarus opens the JDK to the class path (the system class
+  loader) and to the game's `LaunchClassLoader`, and to nothing else, but anything loaded there is trusted.
+- `-Dlazarus.noRelaunch=true` turns off the relaunch, and with it the Java4Shell flag unless the launcher passes
+  `-XX:-UseBASE64Intrinsics` itself. Lazarus prints a warning when that happens.
+- When Lazarus relaunches, the JVM options go into a temporary argfile, but the game's program arguments (which
+  hold the launcher's session token) stay on the command line and are never written to disk.
 - Lazarus does not update Minecraft's other bundled libraries (Netty 4.0.23, Guava 17, Commons IO 2.4). Their known
   CVEs concern server-side HTTP and file handling rather than the game client's network protocol.
 
