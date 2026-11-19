@@ -1,0 +1,52 @@
+---
+title: Lazarus
+---
+{% capture readme %}{% include_relative README.md %}{% endcapture %}
+{% assign bench = site.pages | where: "path", "docs/benchmarks.md" | first %}
+<p class="lede">{{ site.description }}</p>
+
+<div class="actions">
+  <a class="button" id="download" href="{{ site.repo }}/releases/latest">Download the latest release</a>
+  <a class="button-quiet" href="{{ '/install.html' | relative_url }}">How to install</a>
+</div>
+
+<ul class="points">
+  <li><strong>Modern Java</strong>Play Forge 1.8.9 on Java 17, 21 or 25. Your mods and OptiFine stay as they are.</li>
+  <li><strong>LWJGL 3</strong>Optional: native Apple silicon, correct high-DPI scaling, and an OpenGL 4.1 core renderer.</li>
+  <li><strong>Security patches</strong>Log4Shell is neutralised in the game's old Log4j, and Java4Shell is turned off.</li>
+</ul>
+
+<h2>Faster on macOS</h2>
+<p>On a MacBook Air M2 the core renderer runs OptiFine at about <span class="stat">2.5x</span> the frame rate of the legacy OpenGL 2.1 path (568 fps against 223).</p>
+{% if bench.content contains "BSL" %}
+<p>With the BSL shader pack it is about <span class="stat">3x</span> (81 fps against 26), and it runs BSL's shadows, which the legacy path cannot compile.</p>
+{% endif %}
+<p><a href="{{ '/docs/benchmarks.html' | relative_url }}">All benchmarks</a> · <a href="{{ '/docs/core-renderer.html' | relative_url }}">About the core renderer</a></p>
+
+<h2>Compatibility</h2>
+{% assign blocks = readme | split: "## Install" | first | split: "
+
+" %}
+{% for block in blocks %}{% assign head = block | strip | slice: 0, 1 %}{% if head == "|" %}{{ block | markdownify }}{% endif %}{% endfor %}
+<p><a href="{{ '/docs/compatibility.html' | relative_url }}">What is tested and what isn't</a></p>
+
+<script>
+  (function () {
+    var a = document.getElementById('download');
+    if (!a || !window.fetch) return;
+    fetch('https://api.github.com/repos/trq-lol/lol.trq.lazarus/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rel) {
+        if (!rel || !rel.assets) return;
+        for (var i = 0; i < rel.assets.length; i++) {
+          var asset = rel.assets[i];
+          if (/\.jar$/.test(asset.name)) {
+            a.href = asset.browser_download_url;
+            a.textContent = 'Download ' + rel.tag_name;
+            return;
+          }
+        }
+      })
+      .catch(function () {});
+  })();
+</script>

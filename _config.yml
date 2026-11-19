@@ -1,0 +1,41 @@
+title: Lazarus
+description: A runtime for Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and security patches.
+url: https://lazarus.trq.lol
+wordmark: lazarus
+tagline: A runtime for Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and security patches.
+license: LGPL-3.0-or-later
+repo: https://github.com/trq-lol/lol.trq.lazarus
+
+nav:
+  - { title: Install, url: /install.html }
+  - { title: How it works, url: /docs/how-it-works.html }
+  - { title: Core renderer, url: /docs/core-renderer.html }
+  - { title: Shader packs, url: /docs/shader-packs.html }
+  - { title: LWJGL 3, url: /docs/lwjgl3.html }
+  - { title: Compatibility, url: /docs/compatibility.html }
+  - { title: Troubleshooting, url: /docs/troubleshooting.html }
+  - { title: Security, url: /docs/security.html }
+  - { title: Benchmarks, url: /docs/benchmarks.html }
+  - { title: Changelog, url: /CHANGELOG.html }
+  - { title: GitHub, url: "https://github.com/trq-lol/lol.trq.lazarus" }
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - CLAUDE.md
+  - README.md
+  - build
+  - gradle
+  - harness
+  - lwjgl3
+  - runtime
+  - smoke
+  - smoke-mixin
+  - "*.gradle"
+  - gradle.properties
+  - gradlew
+  - gradlew.bat
