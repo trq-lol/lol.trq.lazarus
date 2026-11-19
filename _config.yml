@@ -1,6 +1,7 @@
 title: Lazarus
 description: A runtime for Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and security patches.
 url: https://lazarus.trq.lol
+baseurl: ""
 wordmark: lazarus
 tagline: A runtime for Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and security patches.
 license: LGPL-3.0-or-later
