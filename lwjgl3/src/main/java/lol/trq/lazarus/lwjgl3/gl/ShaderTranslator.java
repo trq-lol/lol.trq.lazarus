@@ -136,7 +136,46 @@ final class ShaderTranslator {
         for (String decl : decls) {
             out.append(decl).append('\n');
         }
-        return out.append(body).toString();
+        out.append(body);
+        if (!vertex) {
+            alphaTest(out, decls, body);
+        }
+        return out.toString();
+    }
+
+    private static final Pattern MAIN = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(void)?\\s*\\)");
+    private static final Pattern OUTPUT =
+            Pattern.compile("(?m)^\\s*(?:layout\\s*\\([^)]*\\)\\s*)?out\\s+vec4\\s+(\\w+)");
+
+    /**
+     * Compatibility profiles apply the fixed-function alpha test after a fragment shader, and shader packs rely on it
+     * for leaves and other cutouts. Core has no alpha test, so the shader's main is wrapped in one, driven by the
+     * game's alpha state ({@code lz_AlphaFunc} 0 means off).
+     */
+    private static void alphaTest(StringBuilder out, Set<String> decls, String body) {
+        String target;
+        if (decls.contains("out vec4 lz_FragColor;")) {
+            target = "lz_FragColor";
+        } else if (decls.contains("out vec4 lz_FragData[8];")) {
+            target = "lz_FragData[0]";
+        } else {
+            Matcher m = OUTPUT.matcher(body);
+            if (!m.find()) return;
+            target = m.group(1);
+        }
+        Matcher main = MAIN.matcher(out);
+        if (!main.find()) return;
+        out.replace(main.start(), main.end(), "void lz_main()");
+        out.append("\nuniform int lz_AlphaFunc;\nuniform float lz_AlphaRef;\n")
+                .append("void main() {\n    lz_main();\n    float a = ")
+                .append(target)
+                .append(".a;\n")
+                .append("    if (lz_AlphaFunc == 0x0200 || (lz_AlphaFunc == 0x0201 && !(a < lz_AlphaRef))\n")
+                .append("            || (lz_AlphaFunc == 0x0202 && a != lz_AlphaRef)")
+                .append(" || (lz_AlphaFunc == 0x0203 && !(a <= lz_AlphaRef))\n")
+                .append("            || (lz_AlphaFunc == 0x0204 && !(a > lz_AlphaRef))")
+                .append(" || (lz_AlphaFunc == 0x0205 && a == lz_AlphaRef)\n")
+                .append("            || (lz_AlphaFunc == 0x0206 && !(a >= lz_AlphaRef))) discard;\n}\n");
     }
 
     private static String word(String s, String from, String to) {

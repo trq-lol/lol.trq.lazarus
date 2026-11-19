@@ -366,6 +366,8 @@ public final class CoreGl {
             int fogStart,
             int fogEnd,
             int fogScale,
+            int alphaFunc,
+            int alphaRef,
             Uniforms u) {
         static ProgramBuiltins of(int program) {
             int[] locations = {
@@ -379,7 +381,9 @@ public final class CoreGl {
                 GL20C.glGetUniformLocation(program, "lz_Fog.density"),
                 GL20C.glGetUniformLocation(program, "lz_Fog.start"),
                 GL20C.glGetUniformLocation(program, "lz_Fog.end"),
-                GL20C.glGetUniformLocation(program, "lz_Fog.scale")
+                GL20C.glGetUniformLocation(program, "lz_Fog.scale"),
+                GL20C.glGetUniformLocation(program, "lz_AlphaFunc"),
+                GL20C.glGetUniformLocation(program, "lz_AlphaRef")
             };
             int max = 0;
             for (int l : locations) max = Math.max(max, l);
@@ -395,6 +399,8 @@ public final class CoreGl {
                     locations[8],
                     locations[9],
                     locations[10],
+                    locations[11],
+                    locations[12],
                     new Uniforms(max + 1));
         }
     }
@@ -858,6 +864,7 @@ public final class CoreGl {
     // ---- current attributes
 
     public static void glColor4f(float r, float g, float b, float a) {
+        if (beginMode >= 0) beginAttributes |= 1 << 1;
         if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && recording != null && record(() -> glColor4f(r, g, b, a))) return;
         color[0] = r;
@@ -875,6 +882,7 @@ public final class CoreGl {
     }
 
     public static void glNormal3f(float x, float y, float z) {
+        if (beginMode >= 0) beginAttributes |= 1 << 4;
         if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && recording != null && record(() -> glNormal3f(x, y, z))) return;
         normal[0] = x;
@@ -883,6 +891,7 @@ public final class CoreGl {
     }
 
     public static void glTexCoord2f(float s, float t) {
+        if (beginMode >= 0) beginAttributes |= 1 << 2;
         if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && recording != null && record(() -> glTexCoord2f(s, t))) return;
         uv0[0] = s;
@@ -890,6 +899,7 @@ public final class CoreGl {
     }
 
     public static void glMultiTexCoord2f(int target, float s, float t) {
+        if (beginMode >= 0) beginAttributes |= target == GL13C.GL_TEXTURE1 ? 1 << 3 : 1 << 2;
         if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && recording != null && record(() -> glMultiTexCoord2f(target, s, t))) return;
         float[] uv = target == GL13C.GL_TEXTURE1 ? uv1 : uv0;
@@ -903,9 +913,15 @@ public final class CoreGl {
 
     // ---- immediate mode
 
+    /** Bits of {@link #LOCATIONS} set per vertex since glBegin; position always is. */
+    private static int beginAttributes;
+
+    private static final int ALL_ATTRIBUTES = (1 << 5) - 1;
+
     public static void glBegin(int mode) {
         beginMode = mode;
         immediateCount = 0;
+        beginAttributes = 1;
     }
 
     public static void glVertex2f(float x, float y) {
@@ -936,7 +952,7 @@ public final class CoreGl {
         int count = immediateCount;
         if (count == 0) return;
         if (recording != null) {
-            recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count).draw(mode));
+            recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count, beginAttributes).draw(mode));
             if (!executeWhileRecording) return;
         }
         if (rawCount > 0) {
@@ -1227,7 +1243,7 @@ public final class CoreGl {
         }
         flush();
         if (recording != null) {
-            recording.add(new StaticMesh(gather(first, count), count).draw(mode));
+            recording.add(new StaticMesh(gather(first, count), count, enabledArrays()).draw(mode));
             if (!executeWhileRecording) return;
         }
         if (!vertexArray.enabled) return;
@@ -1311,6 +1327,21 @@ public final class CoreGl {
         genericApplied = genericEnabled;
         draw(mode, first, count);
         finishDraw();
+    }
+
+    private static int enabledArrays() {
+        int mask = 0;
+        for (int i = 0; i < attribArrays.length; i++) {
+            if (attribArrays[i].enabled) mask |= 1 << i;
+        }
+        return mask | 1;
+    }
+
+    /** Sets the current value of every attribute in {@code mask} that is not read from an array. */
+    static void constants(int mask) {
+        for (int i = 0; i < LOCATIONS.length; i++) {
+            if ((mask & (1 << i)) != 0) constant(LOCATIONS[i]);
+        }
     }
 
     private static long align(long bytes) {
@@ -1561,18 +1592,22 @@ public final class CoreGl {
 
     // ---- drawing
 
-    static void bindInterleaved() {
-        bindInterleaved(0);
+    private static void bindInterleaved(long base) {
+        bindInterleaved(base, ALL_ATTRIBUTES);
     }
 
-    private static void bindInterleaved(long base) {
+    /** Points the attributes at the interleaved layout and enables those in {@code mask}; the rest stay constant. */
+    static void bindInterleaved(long base, int mask) {
         int stride = FLOATS * 4;
         GL20C.glVertexAttribPointer(Shader.POS, 3, GL_FLOAT, false, stride, base);
         GL20C.glVertexAttribPointer(Shader.COLOR, 4, GL_FLOAT, false, stride, base + 12);
         GL20C.glVertexAttribPointer(Shader.UV0, 2, GL_FLOAT, false, stride, base + 28);
         GL20C.glVertexAttribPointer(Shader.UV1, 2, GL_FLOAT, false, stride, base + 36);
         GL20C.glVertexAttribPointer(Shader.NORMAL, 3, GL_FLOAT, false, stride, base + 44);
-        for (int loc : LOCATIONS) GL20C.glEnableVertexAttribArray(loc);
+        for (int i = 0; i < LOCATIONS.length; i++) {
+            if ((mask & (1 << i)) != 0) GL20C.glEnableVertexAttribArray(LOCATIONS[i]);
+            else GL20C.glDisableVertexAttribArray(LOCATIONS[i]);
+        }
     }
 
     static void draw(int mode, int first, int count) {
@@ -1709,6 +1744,8 @@ public final class CoreGl {
         b.u().f(b.fogStart(), fogStart);
         b.u().f(b.fogEnd(), fogEnd);
         b.u().f(b.fogScale(), fogEnd != fogStart ? 1f / (fogEnd - fogStart) : 0f);
+        b.u().i(b.alphaFunc(), alphaTest ? alphaFunc : 0);
+        b.u().f(b.alphaRef(), alphaRef);
     }
 
     /** Returns the array buffer binding to what the game last bound, which it may rely on after a draw. */

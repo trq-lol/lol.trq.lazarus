@@ -20,13 +20,17 @@ final class StaticMesh {
 
     private float[] pending;
     private final int count;
+    /** Bit per emulator attribute location that the list supplied per vertex; the rest come from current state. */
+    private final int perVertex;
+
     private int vbo;
     private int vao;
     private long context;
 
-    StaticMesh(float[] data, int count) {
+    StaticMesh(float[] data, int count, int perVertex) {
         this.pending = data;
         this.count = count;
+        this.perVertex = perVertex;
     }
 
     Runnable draw(int mode) {
@@ -47,14 +51,15 @@ final class StaticMesh {
             context = current;
             CoreGl.bindVertexArray(vao);
             CoreGl.bindArrayBuffer(vbo);
-            CoreGl.bindInterleaved();
+            CoreGl.bindInterleaved(0, perVertex);
         } else if (context == current) {
             CoreGl.bindVertexArray(vao);
         } else {
             CoreGl.bindContextVertexArray();
             CoreGl.bindArrayBuffer(vbo);
-            CoreGl.bindInterleaved();
+            CoreGl.bindInterleaved(0, perVertex);
         }
+        CoreGl.constants(~perVertex);
         CoreGl.draw(mode, 0, count);
         CoreGl.finishDraw();
     }

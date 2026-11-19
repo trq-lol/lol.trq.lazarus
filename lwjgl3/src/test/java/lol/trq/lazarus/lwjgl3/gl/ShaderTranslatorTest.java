@@ -163,4 +163,17 @@ class ShaderTranslatorTest {
         assertTrue(out.contains("texture(lz_texture, uv)"), out);
         assertTrue(out.contains("textureGrad(lz_texture, uv, uv, uv)"), out);
     }
+
+    @Test
+    void fragmentShadersGetTheCompatibilityAlphaTest() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT, "uniform sampler2D t; void main() { gl_FragData[0] = vec4(1.0); }");
+        assertTrue(out.contains("void lz_main()"), out);
+        assertTrue(out.contains("uniform int lz_AlphaFunc;"), out);
+        assertTrue(out.contains("float a = lz_FragData[0].a;"), out);
+        assertTrue(out.contains("discard;"), out);
+        String vertex =
+                ShaderTranslator.translate(ShaderTranslator.VERTEX, "void main() { gl_Position = ftransform(); }");
+        assertFalse(vertex.contains("lz_AlphaFunc"), vertex);
+    }
 }
