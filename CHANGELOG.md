@@ -3,6 +3,14 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] - 2026-11-19
+
+### Fixed
+
+- The core renderer keeps all of its emulated OpenGL state per thread, not only the bindings: matrix stacks, enables,
+  fog, lighting, colour, client arrays and pending batches. Forge's splash thread could otherwise leave the main
+  thread with a corrupted matrix stack, which broke world-to-screen projection for render libraries.
+
 ## [0.4.1] - 2026-11-19
 
 ### Fixed
