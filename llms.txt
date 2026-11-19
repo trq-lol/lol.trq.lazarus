@@ -1,6 +1,6 @@
 # lol.trq.lazarus
 
-> A modern runtime for Minecraft Forge 1.8.9: Java 17 to 25, optional LWJGL 3, and Log4Shell and Java4Shell patched. OptiFine and Mixin mods keep working. One jar: a LaunchWrapper replacement, a Java agent that patches Forge, FML, Mixin 0.7 and old
+> Runs Minecraft Forge 1.8.9 on modern Java, with optional LWJGL 3 and Log4Shell and Java4Shell fixes. One jar: a LaunchWrapper replacement, a Java agent that patches Forge, FML, Mixin 0.7 and old
 > libraries as they load, a self-repairing bootstrap, and an installer. LGPL-3.0-or-later.
 
 ## Docs
