@@ -196,4 +196,10 @@ class ShaderTranslatorTest {
         assertTrue(out.contains("in vec4 a;"), out);
         assertFalse(out.contains("attribute"), out);
     }
+
+    @Test
+    void conditionCommentsAreLeftAlone() {
+        String out = ShaderTranslator.zeroUndefinedMacros("#if FOO == 1 // FOO is 0 or 1"\"n#endif"\"n");
+        assertTrue(out.contains("#if 0 == 1 // FOO is 0 or 1"), out);
+    }
 }

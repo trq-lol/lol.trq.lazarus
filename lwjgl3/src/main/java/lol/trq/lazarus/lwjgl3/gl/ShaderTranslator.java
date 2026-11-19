@@ -198,7 +198,10 @@ final class ShaderTranslator {
         Matcher condition = CONDITION.matcher(source);
         StringBuilder out = new StringBuilder();
         while (condition.find()) {
-            String expression = condition.group(2);
+            String line = condition.group(2);
+            int comment = commentStart(line);
+            String expression = line.substring(0, comment);
+            String trailing = line.substring(comment);
             StringBuilder rewritten = new StringBuilder();
             Matcher id = IDENTIFIER.matcher(expression);
             int last = 0;
@@ -215,11 +218,19 @@ final class ShaderTranslator {
                 afterDefined = name.equals("defined");
                 last = id.end();
             }
-            rewritten.append(expression.substring(last));
+            rewritten.append(expression.substring(last)).append(trailing);
             condition.appendReplacement(out, Matcher.quoteReplacement(condition.group(1) + rewritten));
         }
         condition.appendTail(out);
         return out.toString();
+    }
+
+    /** {@return where a {@code //} or {@code /*} comment starts in a preprocessor line, or its length} */
+    private static int commentStart(String line) {
+        int slash = line.indexOf("//");
+        int block = line.indexOf("/*");
+        if (slash < 0) return block < 0 ? line.length() : block;
+        return block < 0 ? slash : Math.min(slash, block);
     }
 
     private static String word(String s, String from, String to) {
