@@ -47,6 +47,8 @@ public final class CoreGl {
     static final int GL_FLOAT = 0x1406, GL_UNSIGNED_BYTE = 0x1401, GL_BYTE = 0x1400, GL_SHORT = 0x1402;
     static final int GL_UNSIGNED_SHORT = 0x1403, GL_INT = 0x1404, GL_DOUBLE = 0x140A;
     private static final int GL_CLAMP = 0x2900, GL_CLAMP_TO_EDGE = 0x812F;
+    private static final int GL_TEXTURE_ENV = 0x2300, GL_TEXTURE_ENV_MODE = 0x2200, GL_TEXTURE_ENV_COLOR = 0x2201;
+    private static final int GL_COMBINE_RGB = 0x8571, GL_INTERPOLATE = 0x8575, GL_MODULATE = 0x2100;
 
     /** Interleaved layout of immediate mode and display lists: position 3, colour 4, uv0 2, uv1 2, normal 3. */
     private static final int FLOATS = 14;
@@ -104,6 +106,10 @@ public final class CoreGl {
     private static final float[] lightDir0 = {0, 0, 1}, lightDir1 = {0, 0, 1};
     private static final float[] lightDiffuse0 = {1, 1, 1}, lightDiffuse1 = {0, 0, 0};
     private static final float[] lightAmbient = {0.2f, 0.2f, 0.2f};
+    private static final Map<Integer, Boolean> driverCaps = new HashMap<>();
+    private static final int[] boundTextures = new int[32];
+    private static boolean tintOn;
+    private static final float[] tint = new float[4];
 
     private static final float[] color = {1, 1, 1, 1};
     private static final float[] normal = {0, 0, 1};
@@ -298,17 +304,56 @@ public final class CoreGl {
 
     public static void glEnable(int cap) {
         if (record(() -> glEnable(cap))) return;
-        if (!setCap(cap, true)) GL11C.glEnable(cap);
+        if (!setCap(cap, true)) toggle(cap, true);
     }
 
     public static void glDisable(int cap) {
         if (record(() -> glDisable(cap))) return;
-        if (!setCap(cap, false)) GL11C.glDisable(cap);
+        if (!setCap(cap, false)) toggle(cap, false);
+    }
+
+    /** Answered from tracked state, so it never stalls the driver. */
+    public static boolean glIsEnabled(int cap) {
+        switch (cap) {
+            case GL_TEXTURE_2D:
+                return activeTexture < 2 && textureEnabled[activeTexture];
+            case GL_ALPHA_TEST:
+                return alphaTest;
+            case GL_FOG:
+                return fog;
+            case GL_LIGHTING:
+                return lighting;
+            case GL_LIGHT0:
+                return light0;
+            case GL_LIGHT1:
+                return light1;
+            default:
+                return driverCap(cap);
+        }
+    }
+
+    private static boolean driverCap(int cap) {
+        Boolean known = driverCaps.get(cap);
+        if (known == null) {
+            known = GL11C.glIsEnabled(cap);
+            driverCaps.put(cap, known);
+        }
+        return known;
+    }
+
+    public static void glBindTexture(int target, int texture) {
+        if (record(() -> glBindTexture(target, texture))) return;
+        if (target == GL_TEXTURE_2D && activeTexture < boundTextures.length) {
+            boundTextures[activeTexture] = texture;
+        }
+        GL11C.glBindTexture(target, texture);
     }
 
     private static boolean setCap(int cap, boolean on) {
         switch (cap) {
-            case GL_TEXTURE_2D -> textureEnabled[Math.min(activeTexture, 1)] = on;
+            case GL_TEXTURE_2D -> {
+                if (activeTexture < 2) textureEnabled[activeTexture] = on;
+            }
             case GL_ALPHA_TEST -> alphaTest = on;
             case GL_FOG -> fog = on;
             case GL_LIGHTING -> lighting = on;
@@ -332,9 +377,30 @@ public final class CoreGl {
 
     public static void glColorMaterial(int face, int mode) {}
 
-    public static void glTexEnvi(int target, int pname, int param) {}
+    /**
+     * Texture environments are emulated only as far as Minecraft uses them: the hurt and fire tint, which sets unit 1
+     * to interpolate between the previous colour and a constant colour.
+     */
+    public static void glTexEnvi(int target, int pname, int param) {
+        if (record(() -> glTexEnvi(target, pname, param))) return;
+        if (target != GL_TEXTURE_ENV || activeTexture != 1) return;
+        if (pname == GL_COMBINE_RGB) {
+            tintOn = param == GL_INTERPOLATE;
+        } else if (pname == GL_TEXTURE_ENV_MODE && param == GL_MODULATE) {
+            tintOn = false;
+        }
+    }
 
-    public static void glTexEnv(int target, int pname, FloatBuffer params) {}
+    public static void glTexEnv(int target, int pname, FloatBuffer params) {
+        if (target != GL_TEXTURE_ENV || pname != GL_TEXTURE_ENV_COLOR) return;
+        float[] c = new float[4];
+        params.get(params.position(), c);
+        Runnable apply = () -> {
+            if (activeTexture == 1) System.arraycopy(c, 0, tint, 0, 4);
+        };
+        if (record(apply)) return;
+        apply.run();
+    }
 
     public static void glTexGeni(int coord, int pname, int param) {}
 
@@ -427,10 +493,10 @@ public final class CoreGl {
      * re-allocate it, which only compatibility profiles allow.
      */
     public static void glDeleteTextures(int texture) {
-        if (texture == 0 || !GL11C.glIsTexture(texture)) {
+        if (texture == 0) {
             return;
         }
-        int previous = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
+        int previous = boundTextures[Math.min(activeTexture, boundTextures.length - 1)];
         GL11C.glBindTexture(GL_TEXTURE_2D, texture);
         GL11C.glTexImage2D(
                 GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 1, 1, 0, GL11C.GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
@@ -818,9 +884,9 @@ public final class CoreGl {
                 light0,
                 light1,
                 color.clone(),
-                GL11C.glIsEnabled(GL11C.GL_BLEND),
-                GL11C.glIsEnabled(GL11C.GL_DEPTH_TEST),
-                GL11C.glIsEnabled(GL11C.GL_CULL_FACE)));
+                driverCap(GL11C.GL_BLEND),
+                driverCap(GL11C.GL_DEPTH_TEST),
+                driverCap(GL11C.GL_CULL_FACE)));
     }
 
     public static void glPopAttrib() {
@@ -843,6 +909,7 @@ public final class CoreGl {
     private static void toggle(int cap, boolean on) {
         if (on) GL11C.glEnable(cap);
         else GL11C.glDisable(cap);
+        driverCaps.put(cap, on);
     }
 
     // ---- drawing
@@ -911,6 +978,8 @@ public final class CoreGl {
             u.f(s.fogDensity, fogDensity);
             u.f4(s.fogColor, fogColor);
         }
+        u.i(s.tintOn, tintOn ? 1 : 0);
+        if (tintOn) u.f4(s.tint, tint);
         u.i(s.lighting, lighting ? 1 : 0);
         if (lighting) {
             mv.normalMatrix(normalMatrix);

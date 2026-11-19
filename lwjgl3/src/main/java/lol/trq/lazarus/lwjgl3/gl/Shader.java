@@ -73,6 +73,8 @@ final class Shader {
             uniform float uFogEnd;
             uniform float uFogDensity;
             uniform vec4 uFogColor;
+            uniform bool uTintOn;
+            uniform vec4 uTint;
             out vec4 fragColor;
             bool passes(float a) {
                 if (uAlphaFunc == 0x0201) return a < uAlphaRef;
@@ -87,6 +89,7 @@ final class Shader {
             void main() {
                 vec4 c = vColor;
                 if (uTexture0) c *= texture(uSampler0, vUv0);
+                if (uTintOn) c.rgb = mix(c.rgb, uTint.rgb, uTint.a);
                 if (uTexture1) c *= texture(uSampler1, vUv1);
                 if (uAlphaFunc != 0 && !passes(c.a)) discard;
                 if (uFogMode != 0) {
@@ -123,6 +126,8 @@ final class Shader {
     final int fogEnd;
     final int fogDensity;
     final int fogColor;
+    final int tintOn;
+    final int tint;
     final Uniforms uniforms;
 
     Shader() {
@@ -159,6 +164,8 @@ final class Shader {
         fogEnd = glGetUniformLocation(program, "uFogEnd");
         fogDensity = glGetUniformLocation(program, "uFogDensity");
         fogColor = glGetUniformLocation(program, "uFogColor");
+        tintOn = glGetUniformLocation(program, "uTintOn");
+        tint = glGetUniformLocation(program, "uTint");
         int maxLocation = 0;
         for (int location : new int[] {
             modelView,
@@ -182,7 +189,9 @@ final class Shader {
             fogStart,
             fogEnd,
             fogDensity,
-            fogColor
+            fogColor,
+            tintOn,
+            tint
         }) {
             maxLocation = Math.max(maxLocation, location);
         }
