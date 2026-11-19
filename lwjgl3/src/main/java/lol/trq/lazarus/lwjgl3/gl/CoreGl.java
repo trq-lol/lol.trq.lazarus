@@ -1669,7 +1669,7 @@ public final class CoreGl {
 
     /** Binds the fixed-function shader and uploads whatever state changed since the last draw. */
     static void prepareDraw() {
-        if (boundProgram != 0 && boundProgram != shader.program) {
+        if (boundProgram > 0 && boundProgram != shader.program) {
             prepareGameProgram(boundProgram);
             return;
         }
