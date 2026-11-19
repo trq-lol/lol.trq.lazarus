@@ -66,6 +66,9 @@ LWJGL 3 extracts its own natives from its natives jars; LWJGL 2's natives on `ja
 | Windows: installed launcher profile, stock class path, no agent | | ✔ | ✔ |
 | Linux CI (Xvfb, software OpenGL): menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
 | macOS 26.5, Apple M2: menu, Mixin 0.7 mod | ✔ | ✔ | ✔ |
+
+macOS is tested by hand: GitHub's hosted macOS runners are virtual machines without a usable OpenGL
+(`NSGL: Failed to find a suitable pixel format`), so CI cannot boot the game there.
 | macOS: world, Retina screenshot (2x, full window), stock class path with no agent | | | ✔ |
 
 Played by hand: on Windows (typing, menus, inventory, mouse look) and on macOS with a trackpad (typing, copy and

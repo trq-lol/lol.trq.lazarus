@@ -62,21 +62,3 @@ jobs:
           grep -q 'LAZARUS-PROBE sys=${sys:java.vendor}' boot.log
           grep -q "LAZARUS-LOG4SHELL jndiConnected=false" boot.log
           ! grep -q "CVE-2026-114938 (Java4Shell)" boot.log
-
-  # Apple silicon, LWJGL 3. Experimental: hosted macOS runners may not offer a usable OpenGL context.
-  boot-macos:
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: |
-            25
-      - uses: gradle/actions/setup-gradle@v6
-      - name: Boot Forge 1.8.9 on LWJGL 3, Java 25, macOS arm64
-        run: |
-          ./gradlew :harness:runLwjgl3_25 -Pmixin -Ptimeout=900 | tee boot.log
-          grep -q "LAZARUS-SMOKE OK at=menu java=25" boot.log
-          grep -q "LAZARUS-MIXIN OK" boot.log
