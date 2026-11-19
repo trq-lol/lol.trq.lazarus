@@ -140,7 +140,6 @@ public final class Installer {
                 forgeBox.addItem(id);
             }
         } catch (Exception e) {
-            // An unreadable directory simply lists nothing.
         }
     }
 
