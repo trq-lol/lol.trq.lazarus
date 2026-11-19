@@ -21,6 +21,7 @@ final class CoreGlPatch extends InvokeRewritePatch {
             "org/lwjgl/opengl/GL13",
             "org/lwjgl/opengl/GL15",
             "org/lwjgl/opengl/GL20",
+            "org/lwjgl/opengl/GL30",
             "org/lwjgl/opengl/ARBMultitexture",
             "org/lwjgl/opengl/ARBVertexBufferObject",
             "org/lwjgl/opengl/ARBShaderObjects");

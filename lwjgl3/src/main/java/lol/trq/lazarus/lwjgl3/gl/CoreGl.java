@@ -201,6 +201,11 @@ public final class CoreGl {
         glBindBuffer(target, buffer);
     }
 
+    /** Mods that bind their own vertex arrays go through here, so the emulator's binding cache stays true. */
+    public static void glBindVertexArray(int array) {
+        bindVertexArray(array);
+    }
+
     public static void glUseProgram(int program) {
         if (program != boundProgram) {
             GL20C.glUseProgram(program);
