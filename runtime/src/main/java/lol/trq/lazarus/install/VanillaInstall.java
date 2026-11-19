@@ -122,6 +122,9 @@ public final class VanillaInstall {
      * @throws IOException if a file cannot be read or written
      */
     public Result install(String forgeId, String profileName, int maxMemoryMb, boolean lwjgl3) throws IOException {
+        if (!forgeId.matches("[A-Za-z0-9._-]+") || forgeId.contains("..")) {
+            throw new IOException("Not a version id: " + forgeId);
+        }
         Path forgeJson = minecraftDir.resolve("versions").resolve(forgeId).resolve(forgeId + ".json");
         if (!Files.isRegularFile(forgeJson)) {
             throw new IOException("Forge version " + forgeId + " is not installed in " + minecraftDir
@@ -142,25 +145,39 @@ public final class VanillaInstall {
         if (lwjgl3) {
             addLwjgl3(json.getAsJsonArray("libraries"));
         }
-        Files.writeString(versionJson, GSON.toJson(json));
+        writeAtomically(versionJson, GSON.toJson(json));
 
         Path profiles = minecraftDir.resolve("launcher_profiles.json");
         JsonObject root = Files.isRegularFile(profiles)
                 ? JsonParser.parseString(Files.readString(profiles)).getAsJsonObject()
                 : new JsonObject();
-        if (Files.isRegularFile(profiles)) {
-            Files.copy(
-                    profiles,
-                    profiles.resolveSibling("launcher_profiles.json.lazarus-backup"),
-                    StandardCopyOption.REPLACE_EXISTING);
+        Path backup = profiles.resolveSibling("launcher_profiles.json.lazarus-backup");
+        if (Files.isRegularFile(profiles) && !Files.exists(backup)) {
+            Files.copy(profiles, backup);
         }
         if (!root.has("profiles")) {
             root.add("profiles", new JsonObject());
         }
         String profileKey = (lwjgl3 ? "lazarus-lwjgl3-" : "lazarus-") + forgeId;
         root.getAsJsonObject("profiles").add(profileKey, profile(profileName, versionId, library, maxMemoryMb));
-        Files.writeString(profiles, GSON.toJson(root));
+        writeAtomically(profiles, GSON.toJson(root));
         return new Result(versionId, profileKey, library, versionJson);
+    }
+
+    /** Writes through a temporary file in the same directory, so a crash never leaves a half-written file. */
+    private static void writeAtomically(Path target, String content) throws IOException {
+        Path temp =
+                Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temp, content);
+            try {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
     }
 
     JsonObject versionJson(String versionId, String forgeId, String libraryPath, Path library) throws IOException {

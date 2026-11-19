@@ -71,7 +71,6 @@ final class Bootstrap {
         command.add("-cp");
         command.add(String.join(File.pathSeparator, fixedClasspath));
         command.add(Lazarus.class.getName());
-        command.addAll(List.of(args));
 
         Path argfile = Files.createTempFile("lazarus-", ".args");
         argfile.toFile().deleteOnExit();
@@ -83,8 +82,10 @@ final class Bootstrap {
                         : "class path fixed (ASM 9 first, LWJGL 2 dropped when on LWJGL 3); ")
                 + (base64Safe ? "" : "Base64 intrinsics disabled (CVE-2026-114938); ")
                 + (needsFirstThread ? "-XstartOnFirstThread for GLFW on macOS" : ""));
-        Process child =
-                new ProcessBuilder(javaExecutable(), "@" + argfile).inheritIO().start();
+        // Program arguments carry the launcher's session token, so they go on the command line, never to disk.
+        List<String> process = new ArrayList<>(List.of(javaExecutable(), "@" + argfile));
+        process.addAll(List.of(args));
+        Process child = new ProcessBuilder(process).inheritIO().start();
         Runtime.getRuntime().addShutdownHook(new Thread(child::destroy, "lazarus-relaunch-reaper"));
         return Optional.of(child.waitFor());
     }
@@ -155,7 +156,8 @@ final class Bootstrap {
     }
 
     /**
-     * Encodes arguments for a Java {@code @argfile}: each one quoted, with backslashes and quotes escaped.
+     * Encodes arguments for a Java {@code @argfile}: each one quoted, with backslashes, quotes and line breaks
+     * escaped.
      *
      * @param args the arguments
      * @return the file contents
@@ -164,7 +166,11 @@ final class Bootstrap {
         StringBuilder out = new StringBuilder();
         for (String arg : args) {
             out.append('"')
-                    .append(arg.replace("\\", "\\\\").replace("\"", "\\\""))
+                    .append(arg.replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\n", "\\n")
+                            .replace("\r", "\\r")
+                            .replace("\t", "\\t"))
                     .append('"')
                     .append(System.lineSeparator());
         }

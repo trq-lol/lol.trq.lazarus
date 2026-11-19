@@ -68,7 +68,7 @@ The jar has three parts.
 loader to `URLClassLoader` and so fails on Java 9 and later. Lazarus builds the same `LaunchClassLoader` and runs the
 tweaker chain under LaunchWrapper's contract, so FML, Mixin and OptiFine can't tell the difference.
 
-**Agent.** It opens the JDK to the game's class loaders, so the game (and nothing else) gets Java 8's reflection
+**Agent.** It opens the JDK to the class path and the game's class loader, so the game gets Java 8's reflection
 rules. It also patches classes as they load: Pack200, ASM 5 behaviour on ASM 9, `static final` writes and enum
 creation without `sun.reflect`, no `SecurityManager`, appends to the system class path, and Mixin 0.7's private copy
 of ASM 5. [docs/how-it-works.md](docs/how-it-works.md) lists every patch and the JDK change behind it.
