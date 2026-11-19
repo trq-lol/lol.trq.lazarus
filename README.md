@@ -28,7 +28,7 @@ keep working.
 | Singleplayer world | ✔ | ✔ | ✔ |
 | JVM warnings | none | none | none |
 
-Every push boots real Forge 1.8.9 in CI on Java 17, 21 and 25, on LWJGL 2, LWJGL 3 and the core renderer. See
+Every push boots real Forge 1.8.9 in CI on Java 17, 21 and 25, on LWJGL 2, and on LWJGL 3 with both renderers. See
 [compatibility](docs/compatibility.md) for the full matrix.
 
 ## Install
@@ -64,9 +64,9 @@ LWJGL 2. It is the default on Apple silicon Macs. See [LWJGL 3](docs/lwjgl3.md).
 
 ## Core renderer and shader packs
 
-With LWJGL 3, add `-Dlazarus.gl=core` to the JVM arguments to run the game on an OpenGL 4.1 core profile. Lazarus
-emulates the fixed-function pipeline the game was written for and translates its GLSL 1.20 shaders, so vanilla,
-OptiFine and shader packs all work. On macOS, where the legacy path is stuck on OpenGL 2.1:
+On LWJGL 3 the game runs on an OpenGL 4.1 core profile. Lazarus emulates the fixed-function pipeline the game was
+written for and translates its GLSL 1.20 shaders, so vanilla, OptiFine and shader packs all work, including **BSL**,
+**Complementary Reimagined** and **Sildur's Vibrant**. On macOS, where the legacy path is stuck on OpenGL 2.1:
 
 | On an Apple M2 | Legacy OpenGL 2.1 | Core renderer |
 |---|---|---|
@@ -74,7 +74,8 @@ OptiFine and shader packs all work. On macOS, where the legacy path is stuck on 
 | BSL shaders | 26 fps, no shadows | 81 fps, with shadows |
 | Complementary Reimagined | does not load | runs in full |
 
-See [core renderer](docs/core-renderer.md) and [benchmarks](docs/benchmarks.md).
+`-Dlazarus.gl=compat` switches back to the legacy renderer. See [core renderer](docs/core-renderer.md) and
+[benchmarks](docs/benchmarks.md).
 
 ## How it works
 
@@ -127,7 +128,7 @@ Boot the game through Lazarus (the window starts muted and closes itself):
 ```
 ./gradlew :harness:runLazarus25 -Pmixin                        # Forge and a Mixin 0.7 mod on Java 25
 ./gradlew :harness:runLazarus21 -Poptifine=/path/OptiFine.jar  # with OptiFine (bring your own copy)
-./gradlew :harness:runLwjgl3_25 -PjvmArgs=-Dlazarus.gl=core     # LWJGL 3 on the core renderer
+./gradlew :harness:runLwjgl3_25                                # LWJGL 3 on the core renderer
 ./gradlew :harness:runBare25                                   # no agent, stock class path
 ./gradlew :harness:runStock8                                   # stock LaunchWrapper on Java 8, for comparison
 ```

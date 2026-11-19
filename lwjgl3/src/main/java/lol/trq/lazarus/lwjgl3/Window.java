@@ -22,8 +22,8 @@ import org.lwjgl.system.MemoryStack;
  * thread). Buffer swaps and context switches work from any thread, which Forge's splash screen relies on.
  */
 public final class Window {
-    /** Whether {@code -Dlazarus.gl=core} asked for a core context with the fixed-function emulator. */
-    public static final boolean CORE = "core".equals(System.getProperty("lazarus.gl"));
+    /** Whether the core renderer is on: the default, unless {@code -Dlazarus.gl=compat} asks for the legacy one. */
+    public static final boolean CORE = !"compat".equals(System.getProperty("lazarus.gl", "core"));
 
     private static long handle = NULL;
     private static Thread mainThread;

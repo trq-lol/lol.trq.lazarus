@@ -15,8 +15,8 @@ run only.
 
 ```
 ./gradlew :harness:runLazarus25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 2
-./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 3
-./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60 -Dlazarus.gl=core"     # core renderer
+./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 3, core renderer
+./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60 -Dlazarus.gl=compat"   # LWJGL 3, legacy renderer
 ```
 
 Add `-Poptifine=/path/OptiFine.jar` for OptiFine and `-PshaderPack=/path/pack.zip` for a shader pack.

@@ -107,7 +107,7 @@ final class Bench {
                 gc[1] - gcMillisStart,
                 (rt.totalMemory() - rt.freeMemory()) >> 20,
                 System.getProperty("java.version"),
-                System.getProperty("lazarus.gl", "compat"),
+                lwjgl().equals("3") && !"compat".equals(System.getProperty("lazarus.gl")) ? "core" : "compat",
                 lwjgl(),
                 optifine));
     }
