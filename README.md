@@ -157,3 +157,7 @@ why:
 
 [LGPL-3.0-or-later](COPYING.LESSER), which supplements the [GPL-3.0](COPYING). See [DISCLAIMER](DISCLAIMER.md) and
 [NOTICE](NOTICE.md).
+
+## Activity
+
+![Repobeats analytics image](https://repobeats.axiom.co/api/embed/0548b05f0cfa00df82b27e2e1cbc4865a3d5dca9.svg "Repobeats analytics image")
