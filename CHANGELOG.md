@@ -3,7 +3,7 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-19
 
 ### Added
 
