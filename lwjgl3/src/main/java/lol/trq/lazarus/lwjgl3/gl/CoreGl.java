@@ -47,6 +47,10 @@ public final class CoreGl {
     static final int GL_FLOAT = 0x1406, GL_UNSIGNED_BYTE = 0x1401, GL_BYTE = 0x1400, GL_SHORT = 0x1402;
     static final int GL_UNSIGNED_SHORT = 0x1403, GL_INT = 0x1404, GL_DOUBLE = 0x140A;
     private static final int GL_CLAMP = 0x2900, GL_CLAMP_TO_EDGE = 0x812F;
+    private static final int GL_DEPTH_TEXTURE_MODE = 0x884B, GL_LUMINANCE = 0x1909, GL_INTENSITY = 0x8049;
+    private static final int GL_ALPHA = 0x1906;
+    private static final int GL33_TEXTURE_SWIZZLE_R = 0x8E42, GL33_TEXTURE_SWIZZLE_G = 0x8E43;
+    private static final int GL33_TEXTURE_SWIZZLE_B = 0x8E44, GL33_TEXTURE_SWIZZLE_A = 0x8E45;
     private static final int GL_TEXTURE_ENV = 0x2300, GL_TEXTURE_ENV_MODE = 0x2200, GL_TEXTURE_ENV_COLOR = 0x2201;
     private static final int GL_COMBINE_RGB = 0x8571, GL_INTERPOLATE = 0x8575, GL_MODULATE = 0x2100;
 
@@ -88,6 +92,9 @@ public final class CoreGl {
 
     private static final Map<Long, Integer> contextVaos = new ConcurrentHashMap<>();
     private static int contextVao;
+    /** Whether a mod has bound a vertex array of its own; generic attribute calls then go straight to the driver. */
+    private static boolean modVaoBound;
+
     private static int boundVao = -1;
     private static int boundArrayBuffer;
     private static int gameArrayBuffer;
@@ -207,6 +214,7 @@ public final class CoreGl {
      */
     public static void contextChanged() {
         contextVao = 0;
+        modVaoBound = false;
         activeTexture = 0;
         boundVao = -1;
         boundArrayBuffer = -1;
@@ -259,6 +267,7 @@ public final class CoreGl {
     /** Mods that bind their own vertex arrays go through here, so the emulator's binding cache stays true. */
     public static void glBindVertexArray(int array) {
         flush();
+        modVaoBound = array != 0;
         bindVertexArray(array);
     }
 
@@ -278,9 +287,7 @@ public final class CoreGl {
 
     /** Whether generic attribute calls target the emulator's vertex array rather than one a mod bound itself. */
     private static boolean emulatesGeneric(int index) {
-        return index >= GENERIC_FIRST
-                && index < generic.length
-                && (boundVao == contextVao || boundVao == -1 || contextVao == 0);
+        return index >= GENERIC_FIRST && index < generic.length && !modVaoBound;
     }
 
     private static Array generic(int index) {
@@ -425,6 +432,17 @@ public final class CoreGl {
             ShaderDumps.remember(shader, text, translated);
         }
         GL20C.glShaderSource(shader, translated);
+    }
+
+    /** Finds uniforms the translator renamed, such as a sampler called {@code texture}, under their old names. */
+    public static int glGetUniformLocationARB(int program, CharSequence name) {
+        flush();
+        String n = name.toString();
+        return GL20C.glGetUniformLocation(program, n.equals("texture") ? ShaderTranslator.TEXTURE_RENAMED : n);
+    }
+
+    public static int glGetUniformLocation(int program, CharSequence name) {
+        return glGetUniformLocationARB(program, name);
     }
 
     public static void glCompileShader(int shader) {
@@ -803,6 +821,16 @@ public final class CoreGl {
 
     public static void glTexParameteri(int target, int pname, int param) {
         flush();
+        if (pname == GL_DEPTH_TEXTURE_MODE) {
+            // Core removed depth texture modes; a swizzle gives the compatibility result, depth in R, G and B.
+            int rgb = param == GL_ALPHA ? GL11C.GL_ZERO : GL11C.GL_RED;
+            int alpha = param == GL_LUMINANCE ? GL11C.GL_ONE : GL11C.GL_RED;
+            GL11C.glTexParameteri(target, GL33_TEXTURE_SWIZZLE_R, rgb);
+            GL11C.glTexParameteri(target, GL33_TEXTURE_SWIZZLE_G, rgb);
+            GL11C.glTexParameteri(target, GL33_TEXTURE_SWIZZLE_B, rgb);
+            GL11C.glTexParameteri(target, GL33_TEXTURE_SWIZZLE_A, alpha);
+            return;
+        }
         GL11C.glTexParameteri(target, pname, param == GL_CLAMP ? GL_CLAMP_TO_EDGE : param);
     }
 

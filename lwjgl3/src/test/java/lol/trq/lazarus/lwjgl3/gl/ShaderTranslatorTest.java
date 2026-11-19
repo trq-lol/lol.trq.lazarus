@@ -152,4 +152,15 @@ class ShaderTranslatorTest {
         assertTrue(out.contains("texelFetch(t, s / 2, 0)"), out);
         assertFalse(out.contains("#extension"), out);
     }
+
+    @Test
+    void samplerNamedTextureIsRenamedAwayFromTheBuiltin() {
+        String out = ShaderTranslator.translate(
+                ShaderTranslator.FRAGMENT,
+                "uniform sampler2D texture; varying vec2 uv;"
+                        + " void main() { gl_FragColor = texture2D(texture, uv) + texture2DGradARB(texture, uv, uv, uv); }");
+        assertTrue(out.contains("uniform sampler2D lz_texture;"), out);
+        assertTrue(out.contains("texture(lz_texture, uv)"), out);
+        assertTrue(out.contains("textureGrad(lz_texture, uv, uv, uv)"), out);
+    }
 }

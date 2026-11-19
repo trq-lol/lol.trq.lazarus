@@ -16,6 +16,12 @@ final class ShaderTranslator {
     static final int VERTEX = 0x8B31;
     static final int FRAGMENT = 0x8B30;
 
+    /**
+     * Legacy shaders, OptiFine packs among them, often name a sampler {@code texture}, which GLSL 1.30 made a built-in
+     * function; such identifiers are renamed to this.
+     */
+    static final String TEXTURE_RENAMED = "lz_texture";
+
     /** A vertex input of translated shaders and the emulator's attribute location for it. */
     record Attribute(String name, int location) {}
 
@@ -58,6 +64,7 @@ final class ShaderTranslator {
         String body = EXTENSION.matcher(source).replaceAll("");
         Set<String> decls = new LinkedHashSet<>();
 
+        body = body.replaceAll("\\btexture\\b(?!\\s*\\()", TEXTURE_RENAMED);
         body = word(body, "attribute", "in");
         body = word(body, "varying", vertex ? "out" : "in");
 
@@ -102,6 +109,11 @@ final class ShaderTranslator {
             decls.add("in vec4 lz_Vertex;");
         }
 
+        body = call(body, "texture2DLodARB", "textureLod");
+        body = call(body, "texture2DGradARB", "textureGrad");
+        body = call(body, "texture2DProjLodARB", "textureProjLod");
+        body = call(body, "texture3DLodARB", "textureLod");
+        body = call(body, "shadow2DLodARB", "shadow2DLod");
         body = call(body, "texture2DLod", "textureLod");
         body = call(body, "texture2DGrad", "textureGrad");
         body = call(body, "texture2DProjLod", "textureProjLod");

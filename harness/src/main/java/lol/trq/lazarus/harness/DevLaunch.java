@@ -385,11 +385,14 @@ public final class DevLaunch {
             Files.copy(source, packs.resolve(source.getFileName()), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             selected = source.getFileName().toString();
             setOption(gameDir.resolve("options.txt"), "useVbo", "true");
+            // OptiFine refuses to load shaders with Fast Render or antialiasing on.
+            setOption(gameDir.resolve("optionsof.txt"), "ofFastRender", "false");
+            setOption(gameDir.resolve("optionsof.txt"), "ofAaLevel", "0");
         }
         setOption(gameDir.resolve("optionsshaders.txt"), "shaderPack", selected);
     }
 
-    /** Sets {@code key:value} (or {@code key=value} in optionsshaders.txt) in an options file, keeping other lines. */
+    /** Sets {@code key:value} ({@code key=value} in optionsshaders.txt) in an options file, keeping other lines. */
     private static void setOption(Path file, String key, String value) throws IOException {
         String separator = file.getFileName().toString().equals("optionsshaders.txt") ? "=" : ":";
         List<String> lines =
