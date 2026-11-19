@@ -12,6 +12,8 @@
 - [docs/troubleshooting.md](docs/troubleshooting.md): errors and fixes
 - [docs/security.md](docs/security.md): Log4Shell, Java4Shell, what is and is not covered
 - [docs/lwjgl3.md](docs/lwjgl3.md): optional LWJGL 3, the API layer, what is tested
+- [docs/core-renderer.md](docs/core-renderer.md): opt-in OpenGL 4.1 core renderer, fixed-function emulation, GLSL translation
+- [docs/benchmarks.md](docs/benchmarks.md): the frame time benchmark and results
 - [CLAUDE.md](CLAUDE.md): mental model, patterns that matter, traps
 - [CHANGELOG](CHANGELOG.md), [CONTRIBUTING](CONTRIBUTING.md), [NOTICE](NOTICE.md)
 

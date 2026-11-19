@@ -58,7 +58,8 @@ support Lazarus.
 
 Tick the box in the installer (or pass `--lwjgl3`) to get a second profile that runs on LWJGL 3 instead of 1.8.9's
 LWJGL 2. That means GLFW for the window and input, correct high-DPI scaling, and native Apple silicon. On Apple
-silicon Macs this profile is selected by default. [docs/lwjgl3.md](docs/lwjgl3.md) covers what changes.
+silicon Macs this profile is selected by default. [docs/lwjgl3.md](docs/lwjgl3.md) covers what changes. With LWJGL 3 there is also an opt-in OpenGL 4.1 core renderer,
+the way to modern OpenGL on macOS: see [docs/core-renderer.md](docs/core-renderer.md).
 
 ## How it works
 
