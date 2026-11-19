@@ -12,7 +12,8 @@ import org.objectweb.asm.Opcodes;
 
 /**
  * With {@code -Dlazarus.gl=core}, sends the fixed-function GL calls of every game class to the LWJGL 3 jar's
- * emulator. The emulated set is read from the emulator's own public static methods, so the two never drift.
+ * emulator, and flushes the emulator's batched draws before every other OpenGL call. The emulated set is read from
+ * the emulator's own public static methods, so the two never drift.
  */
 final class CoreGlPatch extends InvokeRewritePatch {
     private static final String EMULATOR = "lol/trq/lazarus/lwjgl3/gl/CoreGl";
@@ -89,10 +90,16 @@ final class CoreGlPatch extends InvokeRewritePatch {
 
     @Override
     protected boolean rewrite(MethodVisitor out, int op, String o, String m, String desc) {
-        if (op != Opcodes.INVOKESTATIC || !OWNERS.contains(o) || !emulated.contains(m + desc)) {
+        if (op != Opcodes.INVOKESTATIC || !o.startsWith("org/lwjgl/opengl/")) {
             return false;
         }
-        out.visitMethodInsn(op, EMULATOR, m, desc, false);
+        if (OWNERS.contains(o) && emulated.contains(m + desc)) {
+            out.visitMethodInsn(op, EMULATOR, m, desc, false);
+            return true;
+        }
+        // Any other OpenGL call may depend on, or change, state that pending batched draws were built with.
+        out.visitMethodInsn(Opcodes.INVOKESTATIC, EMULATOR, "flush", "()V", false);
+        out.visitMethodInsn(op, o, m, desc, false);
         return true;
     }
 }

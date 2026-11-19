@@ -8,7 +8,8 @@ import java.util.Locale;
 
 /**
  * Frame time benchmark: a fixed world seed, a still player and a camera that turns one full circle, so runs are
- * comparable across JVMs, LWJGL versions and renderers.
+ * comparable across JVMs, LWJGL versions and renderers. {@code -Dlazarus.smoke.benchDebug=true} keeps the F3 screen
+ * open, which is thousands of tiny text draws.
  */
 final class Bench {
     private final long durationNanos;
@@ -30,6 +31,9 @@ final class Bench {
         Object settings = field(mc, "field_71474_y");
         settings.getClass().getField("field_74350_i").setInt(settings, 260);
         settings.getClass().getField("field_74352_v").setBoolean(settings, false);
+        if (Boolean.getBoolean("lazarus.smoke.benchDebug")) {
+            settings.getClass().getField("field_74330_P").setBoolean(settings, true);
+        }
         try {
             Class.forName("org.lwjgl.opengl.Display")
                     .getMethod("setVSyncEnabled", boolean.class)

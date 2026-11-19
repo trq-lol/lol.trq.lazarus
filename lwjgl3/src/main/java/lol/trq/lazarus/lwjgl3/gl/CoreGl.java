@@ -126,6 +126,12 @@ public final class CoreGl {
     private static float[] immediate = new float[FLOATS * 1024];
     private static int immediateCount;
 
+    /** Triangles from consecutive immediate-mode draws with unchanged state, drawn as one call at the next flush. */
+    private static float[] batch = new float[FLOATS * 4096];
+
+    private static int batchCount;
+    private static final int BATCH_LIMIT = 65536;
+
     private static final Map<Integer, List<Runnable>> lists = new HashMap<>();
     private static List<Runnable> recording;
     private static boolean executeWhileRecording;
@@ -194,6 +200,7 @@ public final class CoreGl {
     }
 
     public static void glBindBuffer(int target, int buffer) {
+        flush();
         if (target == GL15C.GL_ARRAY_BUFFER) {
             gameArrayBuffer = buffer;
             bindArrayBuffer(buffer);
@@ -208,10 +215,12 @@ public final class CoreGl {
 
     /** Mods that bind their own vertex arrays go through here, so the emulator's binding cache stays true. */
     public static void glBindVertexArray(int array) {
+        flush();
         bindVertexArray(array);
     }
 
     public static void glUseProgram(int program) {
+        flush();
         if (program != boundProgram) {
             GL20C.glUseProgram(program);
             boundProgram = program;
@@ -245,26 +254,31 @@ public final class CoreGl {
     }
 
     public static void glMatrixMode(int mode) {
+        flush();
         if (record(() -> glMatrixMode(mode))) return;
         matrixMode = mode;
     }
 
     public static void glLoadIdentity() {
+        flush();
         if (record(CoreGl::glLoadIdentity)) return;
         top().identity();
     }
 
     public static void glPushMatrix() {
+        flush();
         if (record(CoreGl::glPushMatrix)) return;
         current().push();
     }
 
     public static void glPopMatrix() {
+        flush();
         if (record(CoreGl::glPopMatrix)) return;
         current().pop();
     }
 
     public static void glTranslatef(float x, float y, float z) {
+        flush();
         if (record(() -> glTranslatef(x, y, z))) return;
         top().translate(x, y, z);
     }
@@ -274,6 +288,7 @@ public final class CoreGl {
     }
 
     public static void glScalef(float x, float y, float z) {
+        flush();
         if (record(() -> glScalef(x, y, z))) return;
         top().scale(x, y, z);
     }
@@ -283,16 +298,19 @@ public final class CoreGl {
     }
 
     public static void glRotatef(float angle, float x, float y, float z) {
+        flush();
         if (record(() -> glRotatef(angle, x, y, z))) return;
         top().rotate(angle, x, y, z);
     }
 
     public static void glOrtho(double l, double r, double b, double t, double n, double f) {
+        flush();
         if (record(() -> glOrtho(l, r, b, t, n, f))) return;
         top().ortho(l, r, b, t, n, f);
     }
 
     public static void glMultMatrix(FloatBuffer m) {
+        flush();
         float[] a = new float[16];
         m.get(m.position(), a);
         if (record(() -> top().mul(a))) return;
@@ -302,17 +320,20 @@ public final class CoreGl {
     // ---- state
 
     public static void glEnable(int cap) {
+        flush();
         if (record(() -> glEnable(cap))) return;
         if (!setCap(cap, true)) toggle(cap, true);
     }
 
     public static void glDisable(int cap) {
+        flush();
         if (record(() -> glDisable(cap))) return;
         if (!setCap(cap, false)) toggle(cap, false);
     }
 
     /** Answered from tracked state, so it never stalls the driver. */
     public static boolean glIsEnabled(int cap) {
+        flush();
         switch (cap) {
             case GL_TEXTURE_2D:
                 return activeTexture < 2 && textureEnabled[activeTexture];
@@ -341,6 +362,7 @@ public final class CoreGl {
     }
 
     public static void glBindTexture(int target, int texture) {
+        flush();
         if (record(() -> glBindTexture(target, texture))) return;
         if (target == GL_TEXTURE_2D && activeTexture < boundTextures.length) {
             boundTextures[activeTexture] = texture;
@@ -367,6 +389,7 @@ public final class CoreGl {
     }
 
     public static void glAlphaFunc(int func, float ref) {
+        flush();
         if (record(() -> glAlphaFunc(func, ref))) return;
         alphaFunc = func;
         alphaRef = ref;
@@ -381,6 +404,7 @@ public final class CoreGl {
      * to interpolate between the previous colour and a constant colour.
      */
     public static void glTexEnvi(int target, int pname, int param) {
+        flush();
         if (record(() -> glTexEnvi(target, pname, param))) return;
         if (target != GL_TEXTURE_ENV || activeTexture != 1) return;
         if (pname == GL_COMBINE_RGB) {
@@ -391,6 +415,7 @@ public final class CoreGl {
     }
 
     public static void glTexEnv(int target, int pname, FloatBuffer params) {
+        flush();
         if (target != GL_TEXTURE_ENV || pname != GL_TEXTURE_ENV_COLOR) return;
         float[] c = new float[4];
         params.get(params.position(), c);
@@ -407,15 +432,18 @@ public final class CoreGl {
 
     /** Wide lines are invalid in forward-compatible core contexts, which macOS requires. */
     public static void glLineWidth(float width) {
+        flush();
         GL11C.glLineWidth(1f);
     }
 
     public static void glFogi(int pname, int param) {
+        flush();
         if (record(() -> glFogi(pname, param))) return;
         if (pname == GL_FOG_MODE) fogMode = param;
     }
 
     public static void glFogf(int pname, float param) {
+        flush();
         if (record(() -> glFogf(pname, param))) return;
         switch (pname) {
             case GL_FOG_START -> fogStart = param;
@@ -427,6 +455,7 @@ public final class CoreGl {
     }
 
     public static void glFog(int pname, FloatBuffer params) {
+        flush();
         if (pname != GL_FOG_COLOR) {
             glFogf(pname, params.get(params.position()));
             return;
@@ -438,6 +467,7 @@ public final class CoreGl {
     }
 
     public static void glLight(int light, int pname, FloatBuffer params) {
+        flush();
         float[] v = new float[4];
         params.get(params.position(), v, 0, Math.min(4, params.remaining()));
         Runnable apply = () -> {
@@ -453,6 +483,7 @@ public final class CoreGl {
     }
 
     public static void glLightModel(int pname, FloatBuffer params) {
+        flush();
         if (pname != GL_LIGHT_MODEL_AMBIENT) return;
         float[] v = new float[4];
         params.get(params.position(), v, 0, Math.min(4, params.remaining()));
@@ -461,6 +492,7 @@ public final class CoreGl {
     }
 
     public static void glActiveTexture(int texture) {
+        flush();
         if (record(() -> glActiveTexture(texture))) return;
         activeTexture = texture - GL13C.GL_TEXTURE0;
         GL13C.glActiveTexture(texture);
@@ -472,6 +504,7 @@ public final class CoreGl {
 
     /** Client state: applies immediately, even while a display list is being compiled. */
     public static void glClientActiveTexture(int texture) {
+        flush();
         clientActiveTexture = Math.min(texture - GL13C.GL_TEXTURE0, 1);
     }
 
@@ -480,10 +513,12 @@ public final class CoreGl {
     }
 
     public static void glTexParameteri(int target, int pname, int param) {
+        flush();
         GL11C.glTexParameteri(target, pname, param == GL_CLAMP ? GL_CLAMP_TO_EDGE : param);
     }
 
     public static void glTexParameterf(int target, int pname, float param) {
+        flush();
         GL11C.glTexParameterf(target, pname, param == GL_CLAMP ? GL_CLAMP_TO_EDGE : param);
     }
 
@@ -492,6 +527,7 @@ public final class CoreGl {
      * re-allocate it, which only compatibility profiles allow.
      */
     public static void glDeleteTextures(int texture) {
+        flush();
         if (texture == 0) {
             return;
         }
@@ -581,14 +617,92 @@ public final class CoreGl {
             recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count).draw(mode));
             if (!executeWhileRecording) return;
         }
+        if (!appendTriangles(mode, count)) {
+            flush();
+            drawImmediate(immediate, count, mode);
+        }
+    }
+
+    /** Appends an immediate-mode primitive to the batch as triangles; returns false for lines and points. */
+    private static boolean appendTriangles(int mode, int count) {
+        int triangles =
+                switch (mode) {
+                    case GL11C.GL_TRIANGLES -> count / 3;
+                    case GL_QUADS -> count / 4 * 2;
+                    case GL11C.GL_TRIANGLE_STRIP, GL11C.GL_TRIANGLE_FAN, GL_QUAD_STRIP, GL_POLYGON -> count - 2;
+                    default -> -1;
+                };
+        if (triangles < 0) {
+            return false;
+        }
+        if (batchCount + triangles * 3 > BATCH_LIMIT) {
+            flush();
+        }
+        int needed = (batchCount + triangles * 3) * FLOATS;
+        if (batch.length < needed) {
+            batch = Arrays.copyOf(batch, Math.max(needed, batch.length * 2));
+        }
+        switch (mode) {
+            case GL11C.GL_TRIANGLES -> {
+                for (int v = 0; v < triangles * 3; v++) emit(v);
+            }
+            case GL_QUADS -> {
+                for (int q = 0; q < count / 4; q++) {
+                    int b = q * 4;
+                    emit(b);
+                    emit(b + 1);
+                    emit(b + 2);
+                    emit(b);
+                    emit(b + 2);
+                    emit(b + 3);
+                }
+            }
+            case GL11C.GL_TRIANGLE_STRIP, GL_QUAD_STRIP -> {
+                for (int v = 2; v < count; v++) {
+                    boolean even = (v & 1) == 0;
+                    emit(even ? v - 2 : v - 1);
+                    emit(even ? v - 1 : v - 2);
+                    emit(v);
+                }
+            }
+            default -> {
+                for (int v = 2; v < count; v++) {
+                    emit(0);
+                    emit(v - 1);
+                    emit(v);
+                }
+            }
+        }
+        return true;
+    }
+
+    private static void emit(int vertex) {
+        System.arraycopy(immediate, vertex * FLOATS, batch, batchCount * FLOATS, FLOATS);
+        batchCount++;
+    }
+
+    private static void drawImmediate(float[] data, int count, int mode) {
         prepareDraw();
         bindContextVertexArray();
         int floats = count * FLOATS;
         long at = stream.reserve(floats * 4L);
-        stream.write(at, immediate, floats);
+        stream.write(at, data, floats);
         bindInterleaved(at);
         draw(mode, 0, count);
         finishDraw();
+    }
+
+    /**
+     * Draws the pending batch. Every emulated call that changes state flushes first, and the agent inserts a flush
+     * before every OpenGL call the emulator does not handle, so the batch always draws with the state it was built in.
+     */
+    public static void flush() {
+        int count = batchCount;
+        if (count == 0) {
+            return;
+        }
+        batchCount = 0;
+        drawImmediate(batch, count, GL11C.GL_TRIANGLES);
     }
 
     // ---- client arrays
@@ -608,42 +722,52 @@ public final class CoreGl {
     }
 
     public static void glVertexPointer(int size, int type, int stride, ByteBuffer pointer) {
+        flush();
         pointer(vertexArray, size, type, stride, pointer, 0);
     }
 
     public static void glVertexPointer(int size, int type, int stride, long offset) {
+        flush();
         pointer(vertexArray, size, type, stride, null, offset);
     }
 
     public static void glColorPointer(int size, int type, int stride, ByteBuffer pointer) {
+        flush();
         pointer(colorArray, size, type, stride, pointer, 0);
     }
 
     public static void glColorPointer(int size, int type, int stride, long offset) {
+        flush();
         pointer(colorArray, size, type, stride, null, offset);
     }
 
     public static void glTexCoordPointer(int size, int type, int stride, ByteBuffer pointer) {
+        flush();
         pointer(texArray(), size, type, stride, pointer, 0);
     }
 
     public static void glTexCoordPointer(int size, int type, int stride, long offset) {
+        flush();
         pointer(texArray(), size, type, stride, null, offset);
     }
 
     public static void glNormalPointer(int type, int stride, ByteBuffer pointer) {
+        flush();
         pointer(normalArray, 3, type, stride, pointer, 0);
     }
 
     public static void glNormalPointer(int type, int stride, long offset) {
+        flush();
         pointer(normalArray, 3, type, stride, null, offset);
     }
 
     public static void glEnableClientState(int array) {
+        flush();
         clientState(array, true);
     }
 
     public static void glDisableClientState(int array) {
+        flush();
         clientState(array, false);
     }
 
@@ -658,6 +782,7 @@ public final class CoreGl {
     }
 
     public static void glDrawArrays(int mode, int first, int count) {
+        flush();
         if (count <= 0) return;
         if (recording != null) {
             recording.add(new StaticMesh(gather(first, count), count).draw(mode));
@@ -792,12 +917,14 @@ public final class CoreGl {
     // ---- display lists
 
     public static int glGenLists(int range) {
+        flush();
         int base = nextList;
         nextList += range;
         return base;
     }
 
     public static void glNewList(int list, int mode) {
+        flush();
         freeList(list);
         recording = new ArrayList<>();
         executeWhileRecording = mode == GL_COMPILE_AND_EXECUTE;
@@ -805,6 +932,7 @@ public final class CoreGl {
     }
 
     public static void glEndList() {
+        flush();
         if (recording instanceof ArrayList<Runnable> ops) {
             ops.trimToSize();
         }
@@ -813,6 +941,7 @@ public final class CoreGl {
     }
 
     public static void glCallList(int list) {
+        flush();
         List<Runnable> ops = lists.get(list);
         if (ops == null) return;
         if (record(() -> glCallList(list))) return;
@@ -822,6 +951,7 @@ public final class CoreGl {
     }
 
     public static void glDeleteLists(int list, int range) {
+        flush();
         for (int i = 0; i < range; i++) {
             freeList(list + i);
             lists.remove(list + i);
@@ -840,6 +970,7 @@ public final class CoreGl {
     // ---- queries and attribute stack
 
     public static void glGetFloat(int pname, FloatBuffer params) {
+        flush();
         Mat4 m =
                 switch (pname) {
                     case GL_MODELVIEW_MATRIX -> modelView.top();
@@ -855,10 +986,12 @@ public final class CoreGl {
     }
 
     public static float glGetFloat(int pname) {
+        flush();
         return GL11C.glGetFloat(pname);
     }
 
     public static void glGetInteger(int pname, IntBuffer params) {
+        flush();
         if (pname == GL_MATRIX_MODE) {
             params.put(params.position(), matrixMode);
         } else {
@@ -867,10 +1000,12 @@ public final class CoreGl {
     }
 
     public static int glGetInteger(int pname) {
+        flush();
         return pname == GL_MATRIX_MODE ? matrixMode : GL11C.glGetInteger(pname);
     }
 
     public static void glPushAttrib(int mask) {
+        flush();
         attribStack.add(new Attribs(
                 textureEnabled.clone(),
                 alphaTest,
@@ -887,6 +1022,7 @@ public final class CoreGl {
     }
 
     public static void glPopAttrib() {
+        flush();
         if (attribStack.isEmpty()) return;
         Attribs s = attribStack.remove(attribStack.size() - 1);
         System.arraycopy(s.textures(), 0, textureEnabled, 0, 2);
@@ -993,6 +1129,7 @@ public final class CoreGl {
 
     /** Closes a frame; called before every buffer swap. */
     public static void endFrame() {
+        flush();
         if (stream != null) {
             stream.endFrame();
         }
