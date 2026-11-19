@@ -4,6 +4,7 @@ package lol.trq.lazarus.patch;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
@@ -13,6 +14,7 @@ import org.objectweb.asm.Opcodes;
 final class Lwjgl3Patches {
     static final String GL2 = "lol/trq/lazarus/lwjgl3/Gl2";
     static final String AL2 = "lol/trq/lazarus/lwjgl3/Al2";
+    static final String NO_CONTEXT_GL = "lol/trq/lazarus/lwjgl3/NoContextGl";
     private static final String CLIPBOARD = "lol/trq/lazarus/lwjgl3/Clipboard";
     private static final String GUI_SCREEN = "net/minecraft/client/gui/GuiScreen";
 
@@ -86,7 +88,51 @@ final class Lwjgl3Patches {
                         CLIPBOARD,
                         "setClipboardString"),
                 Lwjgl3Patches::active));
+        patches.add(new ConditionalPatch(noContextGetString(), Lwjgl3Patches::active));
         return patches;
+    }
+
+    /**
+     * LWJGL 3's {@code glGetString} aborts the JVM with no current context, where LWJGL 2 returned {@code null}.
+     * Minecraft's crash report queries the GL strings even when the window failed to open; send every call to a
+     * context-checking helper so the original error is reported. Runs before the core renderer's rewrite, which then
+     * leaves the call alone.
+     */
+    static ClassPatch noContextGetString() {
+        return new InvokeRewritePatch() {
+            @Override
+            public String name() {
+                return "lwjgl3-no-context-get-string";
+            }
+
+            @Override
+            public Set<String> targets() {
+                return Set.of();
+            }
+
+            @Override
+            public boolean matches(String className) {
+                return !className.startsWith("lol/trq/lazarus/")
+                        && !className.startsWith("org/lwjgl/")
+                        && !className.startsWith("java/")
+                        && !className.startsWith("javax/")
+                        && !className.startsWith("jdk/")
+                        && !className.startsWith("sun/")
+                        && !className.startsWith("com/sun/");
+            }
+
+            @Override
+            protected boolean rewrite(MethodVisitor out, int op, String owner, String name, String desc) {
+                if (op != Opcodes.INVOKESTATIC
+                        || !owner.equals("org/lwjgl/opengl/GL11")
+                        || !name.equals("glGetString")
+                        || !desc.equals("(I)Ljava/lang/String;")) {
+                    return false;
+                }
+                out.visitMethodInsn(Opcodes.INVOKESTATIC, NO_CONTEXT_GL, name, desc, false);
+                return true;
+            }
+        };
     }
 
     private static String[][] uniforms(String shaderSource, String uniform, String suffix) {

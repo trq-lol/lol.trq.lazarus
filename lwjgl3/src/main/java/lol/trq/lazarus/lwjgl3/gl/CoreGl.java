@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import lol.trq.lazarus.lwjgl3.NoContextGl;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL13C;
@@ -1172,6 +1173,11 @@ public final class CoreGl {
      * before every OpenGL call the emulator does not handle, so the batch always draws with the state it was built in.
      */
     public static void flush() {
+        if ((b().rawCount > 0 || b().batchCount > 0) && !NoContextGl.hasContext()) {
+            b().rawCount = 0;
+            b().batchCount = 0;
+            return;
+        }
         if (b().rawCount > 0) {
             flushRaw();
         }

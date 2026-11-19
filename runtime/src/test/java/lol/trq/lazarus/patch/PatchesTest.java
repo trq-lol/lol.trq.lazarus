@@ -321,4 +321,51 @@ class PatchesTest {
                         0);
         return out;
     }
+
+    @Test
+    void noContextGetStringRedirectsOnlyGlGetString() {
+        byte[] bytes =
+                Bytecode.staticMethod("net/minecraft/client/StubCrash", "java/lang/Object", "info", "()V", mv -> {
+                    mv.visitLdcInsn(0x1F02);
+                    mv.visitMethodInsn(
+                            Opcodes.INVOKESTATIC,
+                            "org/lwjgl/opengl/GL11",
+                            "glGetString",
+                            "(I)Ljava/lang/String;",
+                            false);
+                    mv.visitInsn(Opcodes.POP);
+                    mv.visitLdcInsn(0x0B71);
+                    mv.visitMethodInsn(Opcodes.INVOKESTATIC, "org/lwjgl/opengl/GL11", "glEnable", "(I)V", false);
+                    mv.visitInsn(Opcodes.RETURN);
+                });
+        ClassPatch patch = Lwjgl3Patches.noContextGetString();
+        assertTrue(patch.matches("net/minecraft/client/StubCrash"));
+        assertFalse(patch.matches("lol/trq/lazarus/lwjgl3/NoContextGl"));
+        assertFalse(patch.matches("org/lwjgl/opengl/GL11"));
+        List<String> calls = new java.util.ArrayList<>();
+        new ClassReader(patch.apply("net/minecraft/client/StubCrash", bytes))
+                .accept(
+                        new ClassVisitor(Opcodes.ASM9) {
+                            @Override
+                            public MethodVisitor visitMethod(int a, String n, String d, String s, String[] e) {
+                                return new MethodVisitor(Opcodes.ASM9) {
+                                    @Override
+                                    public void visitMethodInsn(int op, String o, String m, String desc, boolean i) {
+                                        calls.add(o + "." + m + desc);
+                                    }
+                                };
+                            }
+                        },
+                        0);
+        assertTrue(calls.contains("lol/trq/lazarus/lwjgl3/NoContextGl.glGetString(I)Ljava/lang/String;"));
+        assertTrue(calls.contains("org/lwjgl/opengl/GL11.glEnable(I)V"));
+        assertFalse(calls.contains("org/lwjgl/opengl/GL11.glGetString(I)Ljava/lang/String;"));
+    }
+
+    @Test
+    void noContextGetStringLeavesUnrelatedClassesUnchanged() {
+        byte[] bytes = Bytecode.staticMethod(
+                "net/minecraft/Plain", "java/lang/Object", "f", "()V", mv -> mv.visitInsn(Opcodes.RETURN));
+        assertSame(bytes, Lwjgl3Patches.noContextGetString().apply("net/minecraft/Plain", bytes));
+    }
 }

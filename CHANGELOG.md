@@ -9,6 +9,9 @@ project uses [Semantic Versioning](https://semver.org/).
 
 - Rebinding the core renderer's own vertex array through `GL30.glBindVertexArray`, as render libraries do when they
   restore state, no longer turns off generic vertex attribute emulation.
+- A crash before the window's OpenGL context exists is reported again on LWJGL 3. Minecraft's crash report queried
+  `GL11.glGetString` with no current context, which aborted the JVM and hid the original error; it now gets `null`,
+  and the core renderer drops batched draws instead of flushing them without a context.
 
 ## [0.4.2] - 2026-11-19
 

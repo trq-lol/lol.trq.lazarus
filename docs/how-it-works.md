@@ -66,6 +66,7 @@ looks. Each patch only touches the classes it names.
 | `system-class-path` | `CoreModManager` | the application class loader is not a `URLClassLoader` | Append tweaker jars with `Instrumentation.appendToSystemClassLoaderSearch` |
 | `log4shell-message-lookups` | Log4j `MessagePatternConverter` | Log4j 2.0-beta9 to 2.14.1 expand `${...}` in logged messages (Log4Shell, CVE-2021-44228/45046/45105) | Write messages without interpolation, as Log4j 2.15+ does |
 | `log4shell-jndi` | Log4j `JndiLookup` | same | Every `jndi` lookup resolves to nothing |
+| `lwjgl3-no-context-get-string` | every game and mod class, on LWJGL 3 | LWJGL 3's `glGetString` aborts the JVM with no current context; LWJGL 2 returned `null` | Return `null` with no context, so a crash report written before the window opens survives |
 | `mixin-class-bytes` | Mixin 0.7's `MixinServiceLaunchWrapper` (any relocation) | same | Use `ClassLoader.getResourceAsStream`, which it was all along |
 
 ### The reflection stand-in
