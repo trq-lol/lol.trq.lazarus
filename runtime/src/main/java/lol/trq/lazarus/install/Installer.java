@@ -139,7 +139,8 @@ public final class Installer {
             for (String id : new VanillaInstall(Path.of(dirField.getText().trim()), null, version()).forgeVersions()) {
                 forgeBox.addItem(id);
             }
-        } catch (Exception e) {
+        } catch (Exception unreadable) {
+            forgeBox.removeAllItems();
         }
     }
 
