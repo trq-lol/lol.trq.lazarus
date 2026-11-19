@@ -3,6 +3,13 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Rebinding the core renderer's own vertex array through `GL30.glBindVertexArray`, as render libraries do when they
+  restore state, no longer turns off generic vertex attribute emulation.
+
 ## [0.4.2] - 2026-11-19
 
 ### Fixed

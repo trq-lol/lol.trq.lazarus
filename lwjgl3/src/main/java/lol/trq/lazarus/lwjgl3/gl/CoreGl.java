@@ -301,7 +301,7 @@ public final class CoreGl {
     /** Mods that bind their own vertex arrays go through here, so the emulator's binding cache stays true. */
     public static void glBindVertexArray(int array) {
         flush();
-        b().modVaoBound = array != 0;
+        b().modVaoBound = array != 0 && array != b().contextVao;
         bindVertexArray(array);
     }
 
