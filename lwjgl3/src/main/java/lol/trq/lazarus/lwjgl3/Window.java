@@ -37,6 +37,9 @@ public final class Window {
     private static boolean fullscreen;
     private static boolean resizable;
     private static boolean vsync;
+    /** {@code -Dlazarus.swapInterval=<n>} re-applies a swap interval before every swap, for diagnosing vsync. */
+    private static final int FORCED_SWAP_INTERVAL = Integer.getInteger("lazarus.swapInterval", -1);
+
     private static List<ByteBuffer> icons = List.of();
 
     private static int framebufferWidth;
@@ -176,6 +179,9 @@ public final class Window {
         }
         if (CORE) {
             lol.trq.lazarus.lwjgl3.gl.CoreGl.endFrame();
+        }
+        if (FORCED_SWAP_INTERVAL >= 0) {
+            glfwSwapInterval(FORCED_SWAP_INTERVAL);
         }
         glfwSwapBuffers(handle);
     }

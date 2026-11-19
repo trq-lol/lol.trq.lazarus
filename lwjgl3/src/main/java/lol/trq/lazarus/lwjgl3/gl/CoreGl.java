@@ -623,8 +623,28 @@ public final class CoreGl {
         }
     }
 
-    /** Appends an immediate-mode primitive to the batch as triangles; returns false for lines and points. */
+    /**
+     * Whether a client-array draw can join the batch: small, every enabled array in client memory, and only the
+     * attributes the interleaved layout carries.
+     */
+    private static boolean batchable(int count) {
+        if (count > 1024 || !vertexArray.enabled) {
+            return false;
+        }
+        for (Array a : attribArrays) {
+            if (a.enabled && a.memory == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Appends a primitive to the batch as triangles; returns false for lines and points. */
     private static boolean appendTriangles(int mode, int count) {
+        return appendTriangles(immediate, mode, count);
+    }
+
+    private static boolean appendTriangles(float[] source, int mode, int count) {
         int triangles =
                 switch (mode) {
                     case GL11C.GL_TRIANGLES -> count / 3;
@@ -638,6 +658,7 @@ public final class CoreGl {
         if (batchCount + triangles * 3 > BATCH_LIMIT) {
             flush();
         }
+        emitSource = source;
         int needed = (batchCount + triangles * 3) * FLOATS;
         if (batch.length < needed) {
             batch = Arrays.copyOf(batch, Math.max(needed, batch.length * 2));
@@ -676,8 +697,10 @@ public final class CoreGl {
         return true;
     }
 
+    private static float[] emitSource;
+
     private static void emit(int vertex) {
-        System.arraycopy(immediate, vertex * FLOATS, batch, batchCount * FLOATS, FLOATS);
+        System.arraycopy(emitSource, vertex * FLOATS, batch, batchCount * FLOATS, FLOATS);
         batchCount++;
     }
 
@@ -782,8 +805,14 @@ public final class CoreGl {
     }
 
     public static void glDrawArrays(int mode, int first, int count) {
-        flush();
         if (count <= 0) return;
+        if (recording == null && batchable(count)) {
+            float[] data = gather(first, count);
+            if (appendTriangles(data, mode, count)) {
+                return;
+            }
+        }
+        flush();
         if (recording != null) {
             recording.add(new StaticMesh(gather(first, count), count).draw(mode));
             if (!executeWhileRecording) return;
@@ -812,11 +841,11 @@ public final class CoreGl {
             if (a.memory != null) {
                 long bytes = a.span(first, count);
                 if (a.memory.isDirect()) {
-                    StreamBuffer.write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
+                    stream.write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
                 } else {
                     ByteBuffer copy = MemoryUtil.memAlloc((int) bytes);
                     copy.put(0, a.memory, (int) a.offset, (int) bytes);
-                    StreamBuffer.write(at, MemoryUtil.memAddress0(copy), bytes);
+                    stream.write(at, MemoryUtil.memAddress0(copy), bytes);
                     MemoryUtil.memFree(copy);
                 }
                 a.streamedAt = at;
