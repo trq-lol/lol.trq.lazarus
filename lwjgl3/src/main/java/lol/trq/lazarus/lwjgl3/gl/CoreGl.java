@@ -1277,6 +1277,14 @@ public final class CoreGl {
         }
     }
 
+    /** Calls each list named in {@code lists}, from its position to its limit, as OptiFine's batched list calls do. */
+    public static void glCallLists(IntBuffer lists) {
+        flush();
+        for (int i = lists.position(), end = lists.limit(); i < end; i++) {
+            glCallList(lists.get(i));
+        }
+    }
+
     public static void glDeleteLists(int list, int range) {
         flush();
         for (int i = 0; i < range; i++) {
