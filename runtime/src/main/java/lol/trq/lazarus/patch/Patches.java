@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 package lol.trq.lazarus.patch;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,11 +12,15 @@ public final class Patches {
     /** The Lazarus stand-in for {@code java.util.jar.Pack200}. */
     static final String PACK200 = "lol/trq/lazarus/compat/Pack200";
 
+    static final String LEGACY_ASM = "lol/trq/lazarus/compat/LegacyAsm";
+    static final String HOOKS = "lol/trq/lazarus/compat/ForgeHooks";
+    static final String ENUM_HELPER = "net/minecraftforge/common/util/EnumHelper";
+
     private Patches() {}
 
     /** {@return every patch} */
     public static List<ClassPatch> all() {
-        List<ClassPatch> patches = new java.util.ArrayList<>(base());
+        List<ClassPatch> patches = new ArrayList<>(base());
         patches.addAll(Lwjgl3Patches.all());
         ClassPatch coreGl = CoreGlPatch.create();
         if (coreGl != null) {
@@ -72,7 +77,7 @@ public final class Patches {
                 "org/objectweb/asm/Type",
                 "getType",
                 "(Ljava/lang/String;)Lorg/objectweb/asm/Type;",
-                "lol/trq/lazarus/compat/LegacyAsm",
+                LEGACY_ASM,
                 "getType");
     }
 
@@ -93,7 +98,7 @@ public final class Patches {
                 "org/objectweb/asm/Type",
                 "equals",
                 "(Ljava/lang/Object;)Z",
-                "lol/trq/lazarus/compat/LegacyAsm",
+                LEGACY_ASM,
                 "typeEquals");
     }
 
@@ -135,9 +140,6 @@ public final class Patches {
     static String apacheCommons(String rest) {
         return "org/apache/commons/".concat(rest);
     }
-
-    static final String HOOKS = "lol/trq/lazarus/compat/ForgeHooks";
-    static final String ENUM_HELPER = "net/minecraftforge/common/util/EnumHelper";
 
     /**
      * Forge fills {@code @ObjectHolder} and {@code @ItemStackHolder} fields, which are {@code static final}, through

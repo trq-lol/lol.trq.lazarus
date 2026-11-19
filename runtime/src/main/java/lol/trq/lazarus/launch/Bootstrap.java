@@ -21,11 +21,11 @@ import lol.trq.lazarus.agent.LazarusAgent;
  * warnings are missing, the bootstrap starts a child JVM with the agent, a reordered class path and the flags, and
  * exits with its status.
  */
-final class Bootstrap {
+public final class Bootstrap {
     static final String RELAUNCHED = "lazarus.relaunched";
 
     /** JVM flags every Lazarus launch wants; ignored by JDKs that do not know them. */
-    static final List<String> JVM_FLAGS = List.of(
+    public static final List<String> JVM_FLAGS = List.of(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "--enable-native-access=ALL-UNNAMED",
             "--sun-misc-unsafe-memory-access=allow",
@@ -116,7 +116,7 @@ final class Bootstrap {
         return fixed;
     }
 
-    static final String START_ON_FIRST_THREAD = "-XstartOnFirstThread";
+    private static final String START_ON_FIRST_THREAD = "-XstartOnFirstThread";
 
     /**
      * Whether the JVM must be relaunched with {@code -XstartOnFirstThread}: on macOS, GLFW only works on the process's

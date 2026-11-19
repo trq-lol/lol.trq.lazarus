@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.stream.Stream;
+import lol.trq.lazarus.launch.Bootstrap;
 
 /**
  * Installs Lazarus into the official Minecraft Launcher's directory on top of an installed Forge 1.8.9.
@@ -33,11 +34,6 @@ public final class VanillaInstall {
 
     static final int RUNTIME_MAJOR = 21;
     static final String MAIN_CLASS = "lol.trq.lazarus.launch.Lazarus";
-    static final List<String> JVM_FLAGS = List.of(
-            "-XX:+IgnoreUnrecognizedVMOptions",
-            "--enable-native-access=ALL-UNNAMED",
-            "--sun-misc-unsafe-memory-access=allow",
-            "-XX:-UseBASE64Intrinsics");
 
     private static final Gson GSON =
             new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -285,7 +281,7 @@ public final class VanillaInstall {
         if (agentPath.chars().noneMatch(Character::isWhitespace)) {
             args.add("-javaagent:" + agentPath);
         }
-        args.addAll(JVM_FLAGS);
+        args.addAll(Bootstrap.JVM_FLAGS);
         JsonObject profile = new JsonObject();
         profile.addProperty("name", name);
         profile.addProperty("type", "custom");

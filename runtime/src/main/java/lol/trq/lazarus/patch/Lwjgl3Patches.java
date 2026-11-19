@@ -13,8 +13,8 @@ import org.objectweb.asm.Opcodes;
 final class Lwjgl3Patches {
     static final String GL2 = "lol/trq/lazarus/lwjgl3/Gl2";
     static final String AL2 = "lol/trq/lazarus/lwjgl3/Al2";
-    static final String CLIPBOARD = "lol/trq/lazarus/lwjgl3/Clipboard";
-    static final String GUI_SCREEN = "net/minecraft/client/gui/GuiScreen";
+    private static final String CLIPBOARD = "lol/trq/lazarus/lwjgl3/Clipboard";
+    private static final String GUI_SCREEN = "net/minecraft/client/gui/GuiScreen";
 
     private static final String FB = "Ljava/nio/FloatBuffer;";
     private static final String IB = "Ljava/nio/IntBuffer;";

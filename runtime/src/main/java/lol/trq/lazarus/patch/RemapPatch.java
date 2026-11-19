@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.SimpleRemapper;
 
@@ -41,7 +42,7 @@ public final class RemapPatch implements ClassPatch {
     public byte[] apply(String className, byte[] bytes) {
         ClassReader reader = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(0);
-        reader.accept(new ClassRemapper(writer, new SimpleRemapper(org.objectweb.asm.Opcodes.ASM9, mapping)), 0);
+        reader.accept(new ClassRemapper(writer, new SimpleRemapper(Opcodes.ASM9, mapping)), 0);
         return writer.toByteArray();
     }
 }
