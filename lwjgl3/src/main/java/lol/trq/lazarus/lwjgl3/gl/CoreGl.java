@@ -86,19 +86,11 @@ public final class CoreGl {
     }
 
     private static Shader shader;
-    private static StreamBuffer stream;
     private static int quadIbo;
     private static int quadIboQuads;
 
     private static final Map<Long, Integer> contextVaos = new ConcurrentHashMap<>();
-    private static int contextVao;
     /** Whether a mod has bound a vertex array of its own; generic attribute calls then go straight to the driver. */
-    private static boolean modVaoBound;
-
-    private static int boundVao = -1;
-    private static int boundArrayBuffer;
-    private static int gameArrayBuffer;
-    private static int boundProgram;
     private static final float[] normalMatrix = new float[9];
 
     private static int matrixMode = GL_MODELVIEW;
@@ -106,7 +98,6 @@ public final class CoreGl {
     private static final MatrixStack projection = new MatrixStack();
     private static final MatrixStack[] textureMatrix = {new MatrixStack(), new MatrixStack()};
 
-    private static int activeTexture;
     private static int clientActiveTexture;
     private static final boolean[] textureEnabled = new boolean[2];
     private static boolean alphaTest;
@@ -120,16 +111,10 @@ public final class CoreGl {
     private static final float[] lightDir0 = {0, 0, 1}, lightDir1 = {0, 0, 1};
     private static final float[] lightDiffuse0 = {1, 1, 1}, lightDiffuse1 = {0, 0, 0};
     private static final float[] lightAmbient = {0.2f, 0.2f, 0.2f};
-    private static final Map<Integer, Boolean> driverCaps = new HashMap<>();
-    /** 0 unknown, 1 off, 2 on, for the caps in {@link #capSlot}. */
-    private static final byte[] capState = new byte[7];
 
     private static final Map<Integer, Integer> shaderTypes = new ConcurrentHashMap<>();
     private static final Map<Integer, ProgramBuiltins> programBuiltins = new ConcurrentHashMap<>();
     private static final Mat4 modelViewProjection = new Mat4();
-    private static final int[] boundTextures = new int[32];
-    private static final int[] viewport = new int[4];
-    private static boolean viewportKnown;
     private static final boolean DEBUG = Boolean.getBoolean("lazarus.gl.debug");
     private static boolean tintOn;
     private static final float[] tint = new float[4];
@@ -151,7 +136,6 @@ public final class CoreGl {
 
     private static final Array[] generic = new Array[16];
     private static int genericEnabled;
-    private static int genericApplied;
 
     private static int beginMode = -1;
     private static float[] immediate = new float[FLOATS * 1024];
@@ -186,13 +170,60 @@ public final class CoreGl {
 
     private CoreGl() {}
 
+    /**
+     * OpenGL state that belongs to one context, cached per thread. During loading Forge's splash thread draws on the
+     * window's context while the main thread uploads textures on a shared one, so bindings, the stream buffer and
+     * the vertex array cannot be shared between them.
+     */
+    private static final class Binding {
+        final Thread owner = Thread.currentThread();
+        StreamBuffer stream;
+        int contextVao;
+        boolean modVaoBound;
+        int boundVao = -1;
+        int boundArrayBuffer = -1;
+        int gameArrayBuffer;
+        int boundProgram = -1;
+        int activeTexture;
+        final Map<Integer, Boolean> driverCaps = new HashMap<>();
+        /** 0 unknown, 1 off, 2 on, for the caps in {@link #capSlot}. */
+        final byte[] capState = new byte[7];
+
+        final int[] boundTextures = new int[32];
+        final int[] viewport = new int[4];
+        boolean viewportKnown;
+        int genericApplied;
+    }
+
+    private static final ThreadLocal<Binding> BINDINGS = ThreadLocal.withInitial(Binding::new);
+    private static Binding lastBinding;
+
+    private static Binding b() {
+        Binding last = lastBinding;
+        if (last != null && last.owner == Thread.currentThread()) {
+            return last;
+        }
+        Binding binding = BINDINGS.get();
+        lastBinding = binding;
+        return binding;
+    }
+
+    /** {@return this thread's stream buffer}, created on first use in the thread's context */
+    private static StreamBuffer stream() {
+        Binding binding = b();
+        if (binding.stream == null) {
+            binding.stream = new StreamBuffer();
+        }
+        return binding.stream;
+    }
+
     /** Sets up the emulator on the current core context. Called once after the window's context exists. */
     public static void init() {
         bindContextVertexArray();
         if (Boolean.getBoolean("lazarus.gl.debug")) {
             Debug.install();
         }
-        stream = new StreamBuffer();
+        stream();
         restoreArrayBuffer();
         quadIbo = GL15C.glGenBuffers();
         shader = new Shader();
@@ -202,10 +233,10 @@ public final class CoreGl {
 
     /** Vertex arrays are not shared between contexts, so each context (the window, Forge's splash) gets its own. */
     static void bindContextVertexArray() {
-        if (contextVao == 0) {
-            contextVao = contextVaos.computeIfAbsent(GLFW.glfwGetCurrentContext(), k -> GL30C.glGenVertexArrays());
+        if (b().contextVao == 0) {
+            b().contextVao = contextVaos.computeIfAbsent(GLFW.glfwGetCurrentContext(), k -> GL30C.glGenVertexArrays());
         }
-        bindVertexArray(contextVao);
+        bindVertexArray(b().contextVao);
     }
 
     /**
@@ -213,47 +244,47 @@ public final class CoreGl {
      * capabilities and the viewport belong to each context, and Forge's splash screen renders on a second one.
      */
     public static void contextChanged() {
-        contextVao = 0;
-        modVaoBound = false;
-        activeTexture = 0;
-        boundVao = -1;
-        boundArrayBuffer = -1;
-        gameArrayBuffer = 0;
-        boundProgram = -1;
-        Arrays.fill(capState, (byte) 0);
-        driverCaps.clear();
-        Arrays.fill(boundTextures, 0);
-        viewportKnown = false;
+        b().contextVao = 0;
+        b().modVaoBound = false;
+        b().activeTexture = 0;
+        b().boundVao = -1;
+        b().boundArrayBuffer = -1;
+        b().gameArrayBuffer = 0;
+        b().boundProgram = -1;
+        Arrays.fill(b().capState, (byte) 0);
+        b().driverCaps.clear();
+        Arrays.fill(b().boundTextures, 0);
+        b().viewportKnown = false;
     }
 
     static void bindVertexArray(int vao) {
-        if (vao != boundVao) {
+        if (vao != b().boundVao) {
             GL30C.glBindVertexArray(vao);
-            boundVao = vao;
+            b().boundVao = vao;
         }
     }
 
     static void forgetVertexArray(int vao) {
-        if (boundVao == vao) {
-            boundVao = -1;
+        if (b().boundVao == vao) {
+            b().boundVao = -1;
         }
     }
 
     static void bindArrayBuffer(int buffer) {
-        if (buffer != boundArrayBuffer) {
+        if (buffer != b().boundArrayBuffer) {
             GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, buffer);
-            boundArrayBuffer = buffer;
+            b().boundArrayBuffer = buffer;
         }
     }
 
     private static void restoreArrayBuffer() {
-        bindArrayBuffer(gameArrayBuffer);
+        bindArrayBuffer(b().gameArrayBuffer);
     }
 
     public static void glBindBuffer(int target, int buffer) {
         flush();
         if (target == GL15C.GL_ARRAY_BUFFER) {
-            gameArrayBuffer = buffer;
+            b().gameArrayBuffer = buffer;
             bindArrayBuffer(buffer);
         } else {
             GL15C.glBindBuffer(target, buffer);
@@ -267,15 +298,15 @@ public final class CoreGl {
     /** Mods that bind their own vertex arrays go through here, so the emulator's binding cache stays true. */
     public static void glBindVertexArray(int array) {
         flush();
-        modVaoBound = array != 0;
+        b().modVaoBound = array != 0;
         bindVertexArray(array);
     }
 
     public static void glUseProgram(int program) {
         flush();
-        if (program != boundProgram) {
+        if (program != b().boundProgram) {
             GL20C.glUseProgram(program);
-            boundProgram = program;
+            b().boundProgram = program;
         }
     }
 
@@ -287,7 +318,7 @@ public final class CoreGl {
 
     /** Whether generic attribute calls target the emulator's vertex array rather than one a mod bound itself. */
     private static boolean emulatesGeneric(int index) {
-        return index >= GENERIC_FIRST && index < generic.length && !modVaoBound;
+        return index >= GENERIC_FIRST && index < generic.length && !b().modVaoBound;
     }
 
     private static Array generic(int index) {
@@ -314,7 +345,7 @@ public final class CoreGl {
             int index, int size, int type, boolean normalized, int stride, long offset) {
         flush();
         if (!emulatesGeneric(index)) {
-            bindArrayBuffer(gameArrayBuffer);
+            bindArrayBuffer(b().gameArrayBuffer);
             GL20C.glVertexAttribPointer(index, size, type, normalized, stride, offset);
             return;
         }
@@ -345,10 +376,10 @@ public final class CoreGl {
 
     /** Turns off generic attributes on the emulator's vertex array, for draws that do not use them. */
     private static void disableGenerics() {
-        for (int bits = genericApplied; bits != 0; bits &= bits - 1) {
+        for (int bits = b().genericApplied; bits != 0; bits &= bits - 1) {
             GL20C.glDisableVertexAttribArray(Integer.numberOfTrailingZeros(bits));
         }
-        genericApplied = 0;
+        b().genericApplied = 0;
     }
 
     // ---- the game's own shaders, translated from legacy GLSL
@@ -488,7 +519,7 @@ public final class CoreGl {
     private static MatrixStack current() {
         return switch (matrixMode) {
             case GL_PROJECTION -> projection;
-            case GL_TEXTURE -> textureMatrix[Math.min(activeTexture, 1)];
+            case GL_TEXTURE -> textureMatrix[Math.min(b().activeTexture, 1)];
             default -> modelView;
         };
     }
@@ -598,11 +629,11 @@ public final class CoreGl {
 
     public static void glViewport(int x, int y, int width, int height) {
         flush();
-        viewport[0] = x;
-        viewport[1] = y;
-        viewport[2] = width;
-        viewport[3] = height;
-        viewportKnown = true;
+        b().viewport[0] = x;
+        b().viewport[1] = y;
+        b().viewport[2] = width;
+        b().viewport[3] = height;
+        b().viewportKnown = true;
         GL11C.glViewport(x, y, width, height);
     }
 
@@ -620,7 +651,7 @@ public final class CoreGl {
         flush();
         switch (cap) {
             case GL_TEXTURE_2D:
-                return activeTexture < 2 && textureEnabled[activeTexture];
+                return b().activeTexture < 2 && textureEnabled[b().activeTexture];
             case GL_ALPHA_TEST:
                 return alphaTest;
             case GL_FOG:
@@ -652,13 +683,13 @@ public final class CoreGl {
     private static boolean driverCap(int cap) {
         int slot = capSlot(cap);
         if (slot >= 0) {
-            if (capState[slot] == 0) capState[slot] = (byte) (GL11C.glIsEnabled(cap) ? 2 : 1);
-            return capState[slot] == 2;
+            if (b().capState[slot] == 0) b().capState[slot] = (byte) (GL11C.glIsEnabled(cap) ? 2 : 1);
+            return b().capState[slot] == 2;
         }
-        Boolean known = driverCaps.get(cap);
+        Boolean known = b().driverCaps.get(cap);
         if (known == null) {
             known = GL11C.glIsEnabled(cap);
-            driverCaps.put(cap, known);
+            b().driverCaps.put(cap, known);
         }
         return known;
     }
@@ -666,8 +697,8 @@ public final class CoreGl {
     public static void glBindTexture(int target, int texture) {
         flush();
         if (recording != null && record(() -> glBindTexture(target, texture))) return;
-        if (target == GL_TEXTURE_2D && activeTexture < boundTextures.length) {
-            boundTextures[activeTexture] = texture;
+        if (target == GL_TEXTURE_2D && b().activeTexture < b().boundTextures.length) {
+            b().boundTextures[b().activeTexture] = texture;
         }
         GL11C.glBindTexture(target, texture);
     }
@@ -675,7 +706,7 @@ public final class CoreGl {
     private static boolean setCap(int cap, boolean on) {
         switch (cap) {
             case GL_TEXTURE_2D -> {
-                if (activeTexture < 2) textureEnabled[activeTexture] = on;
+                if (b().activeTexture < 2) textureEnabled[b().activeTexture] = on;
             }
             case GL_ALPHA_TEST -> alphaTest = on;
             case GL_FOG -> fog = on;
@@ -708,7 +739,7 @@ public final class CoreGl {
     public static void glTexEnvi(int target, int pname, int param) {
         flush();
         if (recording != null && record(() -> glTexEnvi(target, pname, param))) return;
-        if (target != GL_TEXTURE_ENV || activeTexture != 1) return;
+        if (target != GL_TEXTURE_ENV || b().activeTexture != 1) return;
         if (pname == GL_COMBINE_RGB) {
             tintOn = param == GL_INTERPOLATE;
         } else if (pname == GL_TEXTURE_ENV_MODE && param == GL_MODULATE) {
@@ -723,10 +754,10 @@ public final class CoreGl {
             float[] c = new float[4];
             params.get(params.position(), c);
             if (record(() -> {
-                if (activeTexture == 1) System.arraycopy(c, 0, tint, 0, 4);
+                if (b().activeTexture == 1) System.arraycopy(c, 0, tint, 0, 4);
             })) return;
         }
-        if (activeTexture == 1) params.get(params.position(), tint, 0, 4);
+        if (b().activeTexture == 1) params.get(params.position(), tint, 0, 4);
     }
 
     public static void glTexGeni(int coord, int pname, int param) {}
@@ -807,7 +838,7 @@ public final class CoreGl {
     public static void glActiveTexture(int texture) {
         flush();
         if (recording != null && record(() -> glActiveTexture(texture))) return;
-        activeTexture = texture - GL13C.GL_TEXTURE0;
+        b().activeTexture = texture - GL13C.GL_TEXTURE0;
         GL13C.glActiveTexture(texture);
     }
 
@@ -854,7 +885,7 @@ public final class CoreGl {
         if (texture == 0) {
             return;
         }
-        int previous = boundTextures[Math.min(activeTexture, boundTextures.length - 1)];
+        int previous = b().boundTextures[Math.min(b().activeTexture, b().boundTextures.length - 1)];
         GL11C.glBindTexture(GL_TEXTURE_2D, texture);
         GL11C.glTexImage2D(
                 GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 1, 1, 0, GL11C.GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
@@ -1052,8 +1083,8 @@ public final class CoreGl {
         bindContextVertexArray();
         disableGenerics();
         long bytes = (long) count * rawStride;
-        long at = stream.reserve(bytes);
-        stream.write(at, MemoryUtil.memAddress0(raw), bytes);
+        long at = stream().reserve(bytes);
+        stream().write(at, MemoryUtil.memAddress0(raw), bytes);
         for (int i = 0; i < LOCATIONS.length; i++) {
             int loc = LOCATIONS[i];
             int offset = rawLayout[i * 3];
@@ -1136,8 +1167,8 @@ public final class CoreGl {
         bindContextVertexArray();
         disableGenerics();
         int floats = count * FLOATS;
-        long at = stream.reserve(floats * 4L);
-        stream.write(at, data, floats);
+        long at = stream().reserve(floats * 4L);
+        stream().write(at, data, floats);
         bindInterleaved(at);
         draw(mode, 0, count);
         finishDraw();
@@ -1172,7 +1203,7 @@ public final class CoreGl {
         a.memory = memory;
         // LWJGL 2 takes the buffer's address at its current position; Minecraft moves one shared buffer between calls.
         a.offset = memory != null ? memory.position() : offset;
-        a.buffer = memory == null ? gameArrayBuffer : 0;
+        a.buffer = memory == null ? b().gameArrayBuffer : 0;
     }
 
     public static void glVertexPointer(int size, int type, int stride, ByteBuffer pointer) {
@@ -1273,7 +1304,7 @@ public final class CoreGl {
         }
         long at = 0;
         if (streamBytes > 0) {
-            at = stream.reserve(streamBytes);
+            at = stream().reserve(streamBytes);
         }
         for (int i = 0; i < attribArrays.length; i++) {
             Array a = attribArrays[i];
@@ -1286,11 +1317,11 @@ public final class CoreGl {
             if (a.memory != null) {
                 long bytes = a.span(first, count);
                 if (a.memory.isDirect()) {
-                    stream.write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
+                    stream().write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
                 } else {
                     ByteBuffer copy = MemoryUtil.memAlloc((int) bytes);
                     copy.put(0, a.memory, (int) a.offset, (int) bytes);
-                    stream.write(at, MemoryUtil.memAddress0(copy), bytes);
+                    stream().write(at, MemoryUtil.memAddress0(copy), bytes);
                     MemoryUtil.memFree(copy);
                 }
                 a.streamedAt = at;
@@ -1301,7 +1332,7 @@ public final class CoreGl {
             Array a = generic[Integer.numberOfTrailingZeros(bits)];
             if (a.memory != null) {
                 long bytes = a.span(first, count);
-                stream.write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
+                stream().write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
                 a.streamedAt = at;
                 at += align(bytes);
             }
@@ -1312,7 +1343,7 @@ public final class CoreGl {
             int loc = LOCATIONS[i];
             boolean norm = normalized(loc, a.type);
             if (a.memory != null) {
-                bindArrayBuffer(stream.current());
+                bindArrayBuffer(stream().current());
                 GL20C.glVertexAttribPointer(loc, a.size, a.type, norm, a.stride(), a.streamedAt);
             } else {
                 bindArrayBuffer(a.buffer);
@@ -1320,18 +1351,18 @@ public final class CoreGl {
             }
             GL20C.glEnableVertexAttribArray(loc);
         }
-        for (int bits = genericApplied & ~genericEnabled; bits != 0; bits &= bits - 1) {
+        for (int bits = b().genericApplied & ~genericEnabled; bits != 0; bits &= bits - 1) {
             GL20C.glDisableVertexAttribArray(Integer.numberOfTrailingZeros(bits));
         }
         for (int bits = genericEnabled; bits != 0; bits &= bits - 1) {
             int loc = Integer.numberOfTrailingZeros(bits);
             Array a = generic[loc];
-            bindArrayBuffer(a.memory != null ? stream.current() : a.buffer);
+            bindArrayBuffer(a.memory != null ? stream().current() : a.buffer);
             GL20C.glVertexAttribPointer(
                     loc, a.size, a.type, a.normalize, a.stride(), a.memory != null ? a.streamedAt : a.offset);
             GL20C.glEnableVertexAttribArray(loc);
         }
-        genericApplied = genericEnabled;
+        b().genericApplied = genericEnabled;
         draw(mode, first, count);
         finishDraw();
     }
@@ -1544,7 +1575,7 @@ public final class CoreGl {
                 switch (pname) {
                     case GL_MODELVIEW_MATRIX -> modelView.top();
                     case GL_PROJECTION_MATRIX -> projection.top();
-                    case GL_TEXTURE_MATRIX -> textureMatrix[Math.min(activeTexture, 1)].top();
+                    case GL_TEXTURE_MATRIX -> textureMatrix[Math.min(b().activeTexture, 1)].top();
                     default -> null;
                 };
         if (m == null) {
@@ -1563,8 +1594,8 @@ public final class CoreGl {
         flush();
         if (pname == GL_MATRIX_MODE) {
             params.put(params.position(), matrixMode);
-        } else if (pname == GL11C.GL_VIEWPORT && viewportKnown) {
-            params.put(params.position(), viewport);
+        } else if (pname == GL11C.GL_VIEWPORT && b().viewportKnown) {
+            params.put(params.position(), b().viewport);
         } else {
             GL11C.glGetIntegerv(pname, params);
         }
@@ -1614,8 +1645,8 @@ public final class CoreGl {
         if (on) GL11C.glEnable(cap);
         else GL11C.glDisable(cap);
         int slot = capSlot(cap);
-        if (slot >= 0) capState[slot] = (byte) (on ? 2 : 1);
-        else driverCaps.put(cap, on);
+        if (slot >= 0) b().capState[slot] = (byte) (on ? 2 : 1);
+        else b().driverCaps.put(cap, on);
     }
 
     // ---- drawing
@@ -1669,8 +1700,8 @@ public final class CoreGl {
 
     /** Binds the fixed-function shader and uploads whatever state changed since the last draw. */
     static void prepareDraw() {
-        if (boundProgram > 0 && boundProgram != shader.program) {
-            prepareGameProgram(boundProgram);
+        if (b().boundProgram > 0 && b().boundProgram != shader.program) {
+            prepareGameProgram(b().boundProgram);
             return;
         }
         Shader s = shader;
@@ -1719,27 +1750,27 @@ public final class CoreGl {
     }
 
     static int trackedProgram() {
-        return boundProgram;
+        return b().boundProgram;
     }
 
     static int trackedVertexArray() {
-        return boundVao;
+        return b().boundVao;
     }
 
     static int trackedArrayBuffer() {
-        return gameArrayBuffer;
+        return b().gameArrayBuffer;
     }
 
     static boolean trackedViewport(int[] out) {
-        if (viewportKnown) System.arraycopy(viewport, 0, out, 0, 4);
-        return viewportKnown;
+        if (b().viewportKnown) System.arraycopy(b().viewport, 0, out, 0, 4);
+        return b().viewportKnown;
     }
 
     /** Closes a frame; called before every buffer swap. */
     public static void endFrame() {
         flush();
-        if (stream != null) {
-            stream.endFrame();
+        if (b().stream != null) {
+            stream().endFrame();
         }
     }
 
