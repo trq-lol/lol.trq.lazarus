@@ -24,6 +24,7 @@ public final class SharedDrawable implements Drawable {
         long previous = glfwGetCurrentContext();
         glfwDefaultWindowHints();
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        Window.contextHints();
         window = glfwCreateWindow(1, 1, "shared", NULL, Window.handle());
         if (window == NULL) {
             throw new LWJGLException("GLFW could not create a shared context");

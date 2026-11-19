@@ -17,6 +17,10 @@ public final class Patches {
     public static List<ClassPatch> all() {
         List<ClassPatch> patches = new java.util.ArrayList<>(base());
         patches.addAll(Lwjgl3Patches.all());
+        ClassPatch coreGl = CoreGlPatch.create();
+        if (coreGl != null) {
+            patches.add(coreGl);
+        }
         return List.copyOf(patches);
     }
 

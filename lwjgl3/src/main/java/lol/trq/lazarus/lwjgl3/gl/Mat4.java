@@ -30,7 +30,9 @@ final class Mat4 {
         float[] r = new float[16];
         for (int c = 0; c < 4; c++) {
             for (int row = 0; row < 4; row++) {
-                r[c * 4 + row] = a[row] * b[c * 4] + a[4 + row] * b[c * 4 + 1] + a[8 + row] * b[c * 4 + 2]
+                r[c * 4 + row] = a[row] * b[c * 4]
+                        + a[4 + row] * b[c * 4 + 1]
+                        + a[8 + row] * b[c * 4 + 2]
                         + a[12 + row] * b[c * 4 + 3];
             }
         }
@@ -68,10 +70,22 @@ final class Mat4 {
         float s = (float) Math.sin(rad);
         float t = 1f - c;
         float[] r = {
-            x * x * t + c, y * x * t + z * s, x * z * t - y * s, 0,
-            x * y * t - z * s, y * y * t + c, y * z * t + x * s, 0,
-            x * z * t + y * s, y * z * t - x * s, z * z * t + c, 0,
-            0, 0, 0, 1
+            x * x * t + c,
+            y * x * t + z * s,
+            x * z * t - y * s,
+            0,
+            x * y * t - z * s,
+            y * y * t + c,
+            y * z * t + x * s,
+            0,
+            x * z * t + y * s,
+            y * z * t - x * s,
+            z * z * t + c,
+            0,
+            0,
+            0,
+            0,
+            1
         };
         return mul(r);
     }

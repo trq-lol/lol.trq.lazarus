@@ -58,7 +58,8 @@ public final class CoreGl {
     }
 
     private static Shader shader;
-    private static int vao;
+    private static final java.util.concurrent.ConcurrentHashMap<Long, Integer> vaos =
+            new java.util.concurrent.ConcurrentHashMap<>();
     private static int streamVbo;
     private static int quadIbo;
     private static int quadIboQuads;
@@ -115,11 +116,19 @@ public final class CoreGl {
 
     /** Sets up the emulator on the current core context. Called once after the window's context exists. */
     public static void init() {
-        vao = GL30C.glGenVertexArrays();
-        GL30C.glBindVertexArray(vao);
+        bindVao();
+        if (Boolean.getBoolean("lazarus.gl.debug")) {
+            Debug.install();
+        }
         streamVbo = GL15C.glGenBuffers();
         quadIbo = GL15C.glGenBuffers();
         shader = new Shader();
+    }
+
+    /** Vertex arrays are not shared between contexts, so each context (the window, Forge's splash) gets its own. */
+    private static void bindVao() {
+        long context = org.lwjgl.glfw.GLFW.glfwGetCurrentContext();
+        GL30C.glBindVertexArray(vaos.computeIfAbsent(context, k -> GL30C.glGenVertexArrays()));
     }
 
     private static ArrayList<Mat4> current() {
@@ -318,12 +327,36 @@ public final class CoreGl {
     }
 
     public static void glClientActiveTexture(int texture) {
-        if (record(() -> glClientActiveTexture(texture))) return;
         clientActiveTexture = Math.min(texture - GL13C.GL_TEXTURE0, 1);
     }
 
     public static void glClientActiveTextureARB(int texture) {
         glClientActiveTexture(texture);
+    }
+
+    private static final int GL_CLAMP = 0x2900;
+
+    public static void glTexParameteri(int target, int pname, int param) {
+        GL11C.glTexParameteri(target, pname, param == GL_CLAMP ? 0x812F : param);
+    }
+
+    public static void glTexParameterf(int target, int pname, float param) {
+        GL11C.glTexParameterf(target, pname, param == GL_CLAMP ? 0x812F : param);
+    }
+
+    /**
+     * Frees a texture's storage but keeps its name. Minecraft deletes a texture and then binds the same name to
+     * re-allocate it, which only compatibility profiles allow.
+     */
+    public static void glDeleteTextures(int texture) {
+        if (texture == 0 || !GL11C.glIsTexture(texture)) {
+            return;
+        }
+        int previous = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
+        GL11C.glBindTexture(GL_TEXTURE_2D, texture);
+        GL11C.glTexImage2D(
+                GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 1, 1, 0, GL11C.GL_RGBA, GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
+        GL11C.glBindTexture(GL_TEXTURE_2D, previous);
     }
 
     // ---- current attributes
@@ -409,7 +442,7 @@ public final class CoreGl {
         int count = immediateCount;
         if (recording != null) {
             StaticMesh mesh = new StaticMesh(data, count);
-            recording.add(() -> mesh.draw(mode));
+            recording.add(mesh.draw(mode));
             if (!executeWhileRecording) return;
         }
         drawInterleaved(data, count, mode);
@@ -426,7 +459,8 @@ public final class CoreGl {
         a.type = type;
         a.stride = stride;
         a.memory = memory;
-        a.offset = offset;
+        // LWJGL 2 takes the buffer's address at its current position; Minecraft moves one shared buffer between calls.
+        a.offset = memory != null ? memory.position() : offset;
         a.buffer = memory == null ? GL11C.glGetInteger(GL15C.GL_ARRAY_BUFFER_BINDING) : 0;
     }
 
@@ -486,12 +520,12 @@ public final class CoreGl {
             // Display lists capture the vertex data at compile time.
             float[] data = gather(first, count);
             StaticMesh mesh = new StaticMesh(data, count);
-            recording.add(() -> mesh.draw(mode));
+            recording.add(mesh.draw(mode));
             if (!executeWhileRecording) return;
         }
         if (!vertexArray.enabled) return;
         setUniforms();
-        GL30C.glBindVertexArray(vao);
+        bindVao();
         int uploaded = 0;
         Array[] arrays = {vertexArray, colorArray, texArrays[0], texArrays[1], normalArray};
         int[] locations = {Shader.POS, Shader.COLOR, Shader.UV0, Shader.UV1, Shader.NORMAL};
@@ -517,7 +551,8 @@ public final class CoreGl {
             if (a.memory != null) {
                 long bytes = span(a, first, count);
                 ByteBuffer src = a.memory.duplicate();
-                src.limit((int) Math.min(src.capacity(), src.position() + bytes));
+                src.limit((int) Math.min(src.capacity(), a.offset + bytes));
+                src.position((int) a.offset);
                 GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, streamVbo);
                 GL15C.glBufferSubData(GL15C.GL_ARRAY_BUFFER, uploaded, src);
                 GL20C.glVertexAttribPointer(loc, a.size, a.type, normalized(loc, a.type), stride, uploaded);
@@ -595,7 +630,7 @@ public final class CoreGl {
             return r; // buffer-sourced arrays in display lists are not captured
         }
         int stride = a.stride != 0 ? a.stride : a.size * typeSize(a.type);
-        int base = a.memory.position() + index * stride;
+        int base = (int) a.offset + index * stride;
         for (int i = 0; i < a.size; i++) {
             int at = base + i * typeSize(a.type);
             r[i] = switch (a.type) {
@@ -650,12 +685,13 @@ public final class CoreGl {
     // ---- queries and attribute stack
 
     public static void glGetFloat(int pname, FloatBuffer params) {
-        Mat4 m = switch (pname) {
-            case GL_MODELVIEW_MATRIX -> modelView.get(modelView.size() - 1);
-            case GL_PROJECTION_MATRIX -> projection.get(projection.size() - 1);
-            case GL_TEXTURE_MATRIX -> (activeTexture == 1 ? texture1 : texture0).get(0);
-            default -> null;
-        };
+        Mat4 m =
+                switch (pname) {
+                    case GL_MODELVIEW_MATRIX -> modelView.get(modelView.size() - 1);
+                    case GL_PROJECTION_MATRIX -> projection.get(projection.size() - 1);
+                    case GL_TEXTURE_MATRIX -> (activeTexture == 1 ? texture1 : texture0).get(0);
+                    default -> null;
+                };
         if (m == null) {
             GL11C.glGetFloatv(pname, params);
         } else {
@@ -681,9 +717,18 @@ public final class CoreGl {
 
     public static void glPushAttrib(int mask) {
         attribStack.add(new Object[] {
-            textureEnabled.clone(), alphaTest, alphaFunc, alphaRef, fog, lighting, light0, light1, colorMaterial,
+            textureEnabled.clone(),
+            alphaTest,
+            alphaFunc,
+            alphaRef,
+            fog,
+            lighting,
+            light0,
+            light1,
+            colorMaterial,
             color.clone(),
-            GL11C.glIsEnabled(GL11C.GL_BLEND), GL11C.glIsEnabled(GL11C.GL_DEPTH_TEST),
+            GL11C.glIsEnabled(GL11C.GL_BLEND),
+            GL11C.glIsEnabled(GL11C.GL_DEPTH_TEST),
             GL11C.glIsEnabled(GL11C.GL_CULL_FACE)
         });
     }
@@ -715,7 +760,7 @@ public final class CoreGl {
 
     static void drawInterleaved(float[] data, int count, int mode) {
         setUniforms();
-        GL30C.glBindVertexArray(vao);
+        bindVao();
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, streamVbo);
         GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, data, GL15C.GL_STREAM_DRAW);
         bindInterleaved();
@@ -763,7 +808,7 @@ public final class CoreGl {
 
     static void setUniformsForList() {
         setUniforms();
-        GL30C.glBindVertexArray(vao);
+        bindVao();
     }
 
     private static void setUniforms() {
