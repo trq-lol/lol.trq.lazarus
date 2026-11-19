@@ -14,7 +14,7 @@ Linux it works the same way, so one renderer covers every platform.
 The core renderer is the default on the LWJGL 3 profile (see [LWJGL 3](lwjgl3.md)); Minecraft, Forge, OptiFine and
 mods run on it as they are. To use the legacy renderer instead, add this to the profile's JVM arguments:
 
-```
+```text
 -Dlazarus.gl=compat
 ```
 

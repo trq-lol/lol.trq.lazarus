@@ -5,7 +5,7 @@
 The smoke mod has a benchmark mode. It creates a world from a fixed seed, waits 15 seconds for chunks to load, turns
 the frame cap and vsync off, holds the player still and turns the camera one full circle over the run, then prints:
 
-```
+```text
 LAZARUS-BENCH fps=… avg_ms=… p50_ms=… p99_ms=… p999_ms=… max_ms=… low1_fps=… frames=… gc=… gc_ms=… heap_mb=…
               java=… gl=… lwjgl=… optifine=…
 ```
@@ -13,7 +13,7 @@ LAZARUS-BENCH fps=… avg_ms=… p50_ms=… p99_ms=… p999_ms=… max_ms=… lo
 `low1_fps` is the average frame rate over the slowest 1% of frames; `gc` and `gc_ms` count collections during the
 run only.
 
-```
+```sh
 ./gradlew :harness:runLazarus25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 2
 ./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60"                       # LWJGL 3, core renderer
 ./gradlew :harness:runLwjgl3_25 -PjvmArgs="-Dlazarus.smoke.bench=60 -Dlazarus.gl=compat"   # LWJGL 3, legacy renderer

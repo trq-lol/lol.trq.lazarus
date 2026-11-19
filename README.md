@@ -109,7 +109,7 @@ See [troubleshooting](docs/troubleshooting.md). `-Dlazarus.debug=true` logs ever
 
 ## Building
 
-```
+```sh
 ./gradlew spotlessApply build
 ```
 
@@ -125,7 +125,7 @@ Gradle downloads the JDKs it needs.
 
 Boot the game through Lazarus (the window starts muted and closes itself):
 
-```
+```sh
 ./gradlew :harness:runLazarus25 -Pmixin                        # Forge and a Mixin 0.7 mod on Java 25
 ./gradlew :harness:runLazarus21 -Poptifine=/path/OptiFine.jar  # with OptiFine (bring your own copy)
 ./gradlew :harness:runLwjgl3_25                                # LWJGL 3 on the core renderer
