@@ -100,6 +100,8 @@ public final class DevLaunch {
             }
         }
         writeMutedOptions(gameDir);
+        // Screenshots and benchmarks need the world, not the pause menu that opens when the window loses focus.
+        setOption(gameDir.resolve("options.txt"), "pauseOnLostFocus", "false");
         deleteSmokeWorlds(gameDir);
         selectShaderPack(gameDir, opts.getOrDefault("shaderPack", ""));
 
