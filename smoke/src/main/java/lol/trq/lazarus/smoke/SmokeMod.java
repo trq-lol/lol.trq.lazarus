@@ -17,6 +17,10 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
  * -Dlazarus.smoke.world=true} it then creates a singleplayer world, plays in it for a while and reports again. It
  * exits the game at the end unless {@code -Dlazarus.smoke.stay=true}.
  *
+ * <p>With {@code -Dlazarus.smoke.bench=<seconds>} the world stage becomes a benchmark: once the world has loaded and
+ * settled it turns the frame cap and vsync off, holds the player still and turns the camera one full circle over the
+ * given time, then prints frame time statistics on a {@code LAZARUS-BENCH} line.
+ *
  * <p>The mod is compiled against Forge only. Minecraft is reached by reflection with SRG names, the names Forge uses
  * at run time.
  */
@@ -27,6 +31,8 @@ public class SmokeMod {
     private static final int WORLD_TICKS = Integer.getInteger("lazarus.smoke.worldTicks", 100);
     private static final boolean WORLD = Boolean.getBoolean("lazarus.smoke.world");
     private static final boolean SCREENSHOT = Boolean.getBoolean("lazarus.smoke.screenshot");
+    private static final int BENCH_SECONDS = Integer.getInteger("lazarus.smoke.bench", 0);
+    private static final int BENCH_SETTLE_TICKS = Integer.getInteger("lazarus.smoke.benchSettleTicks", 300);
 
     private enum Stage {
         BOOTING,
@@ -38,6 +44,7 @@ public class SmokeMod {
 
     private Stage stage = Stage.BOOTING;
     private int ticks;
+    private final Bench bench = new Bench(BENCH_SECONDS);
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
@@ -64,7 +71,7 @@ public class SmokeMod {
                 if (++ticks >= MENU_TICKS) {
                     log4shellProbe();
                     report("menu");
-                    if (WORLD) {
+                    if (WORLD || BENCH_SECONDS > 0) {
                         stage = Stage.LOADING_WORLD;
                         ticks = 0;
                         launchWorld();
@@ -80,13 +87,28 @@ public class SmokeMod {
                 }
                 break;
             case IN_WORLD:
-                if (++ticks >= WORLD_TICKS) {
+                if (BENCH_SECONDS > 0) {
+                    if (++ticks == BENCH_SETTLE_TICKS) {
+                        bench.start(minecraft());
+                    }
+                    if (bench.done()) {
+                        bench.report(optifineVersion());
+                        finish();
+                    }
+                } else if (++ticks >= WORLD_TICKS) {
                     report("world");
                     finish();
                 }
                 break;
             default:
                 break;
+        }
+    }
+
+    @SubscribeEvent
+    public void onRender(TickEvent.RenderTickEvent event) throws ReflectiveOperationException {
+        if (event.phase == TickEvent.Phase.START && stage == Stage.IN_WORLD) {
+            bench.frame(minecraft());
         }
     }
 
