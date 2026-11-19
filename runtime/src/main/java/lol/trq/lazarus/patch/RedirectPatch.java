@@ -2,9 +2,6 @@
 package lol.trq.lazarus.patch;
 
 import java.util.Set;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -13,7 +10,7 @@ import org.objectweb.asm.Opcodes;
  *
  * <p>A static call keeps its descriptor. A virtual call becomes a static call whose first parameter is the receiver.
  */
-public final class RedirectPatch implements ClassPatch {
+public final class RedirectPatch extends InvokeRewritePatch {
     private final String name;
     private final Set<String> targets;
     private final int opcode;
@@ -65,29 +62,12 @@ public final class RedirectPatch implements ClassPatch {
     }
 
     @Override
-    public byte[] apply(String className, byte[] bytes) {
-        ClassReader reader = new ClassReader(bytes);
-        ClassWriter writer = new ClassWriter(0);
-        reader.accept(
-                new ClassVisitor(Opcodes.ASM9, writer) {
-                    @Override
-                    public MethodVisitor visitMethod(
-                            int access, String n, String desc, String signature, String[] exceptions) {
-                        return new MethodVisitor(
-                                Opcodes.ASM9, super.visitMethod(access, n, desc, signature, exceptions)) {
-                            @Override
-                            public void visitMethodInsn(int op, String o, String m, String d, boolean itf) {
-                                if (op == opcode && o.equals(owner) && m.equals(method) && d.equals(descriptor)) {
-                                    String newDesc = op == Opcodes.INVOKESTATIC ? d : "(L" + o + ";" + d.substring(1);
-                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, newOwner, newMethod, newDesc, false);
-                                } else {
-                                    super.visitMethodInsn(op, o, m, d, itf);
-                                }
-                            }
-                        };
-                    }
-                },
-                0);
-        return writer.toByteArray();
+    protected boolean rewrite(MethodVisitor out, int op, String o, String m, String d) {
+        if (op != opcode || !o.equals(owner) || !m.equals(method) || !d.equals(descriptor)) {
+            return false;
+        }
+        String newDesc = op == Opcodes.INVOKESTATIC ? d : "(L" + o + ";" + d.substring(1);
+        out.visitMethodInsn(Opcodes.INVOKESTATIC, newOwner, newMethod, newDesc, false);
+        return true;
     }
 }

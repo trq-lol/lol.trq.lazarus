@@ -112,6 +112,15 @@ class PatchesTest {
     }
 
     @Test
+    void redirectLeavesClassesWithoutTheCallAlone() {
+        String name = "test/NoCall";
+        byte[] bytes = Bytecode.staticMethod(name, "java/lang/Object", "f", "()V", mv -> mv.visitInsn(Opcodes.RETURN));
+        RedirectPatch patch = new RedirectPatch(
+                "t", Set.of(name), Opcodes.INVOKESTATIC, "java/lang/String", "valueOf", "()V", HOOKS, "x");
+        assertSame(bytes, patch.apply(name, bytes));
+    }
+
+    @Test
     void redirectVirtualCallPassesReceiver() throws Exception {
         String name = "test/CallsLength";
         byte[] bytes = Bytecode.staticMethod(name, "java/lang/Object", "f", "(Ljava/lang/String;)I", mv -> {
@@ -157,7 +166,8 @@ class PatchesTest {
                 null,
                 "1.8");
         MethodVisitor mv = cw.visitMethod(
-                Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC, "get", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+                Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC,
+                "get", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
         mv.visitCode();
         Label none = new Label();
         mv.visitVarInsn(Opcodes.ALOAD, 0);
@@ -272,8 +282,8 @@ class PatchesTest {
     @Test
     void containsFindsNeedle() {
         byte[] hay = "abcorg/objectweb/asm/xyz".getBytes(StandardCharsets.ISO_8859_1);
-        assertTrue(AsmApiPatch.contains(hay, "org/objectweb/asm/".getBytes(StandardCharsets.ISO_8859_1)));
-        assertFalse(AsmApiPatch.contains(hay, "org/spongepowered".getBytes(StandardCharsets.ISO_8859_1)));
+        assertTrue(Bytes.contains(hay, "org/objectweb/asm/".getBytes(StandardCharsets.ISO_8859_1)));
+        assertFalse(Bytes.contains(hay, "org/spongepowered".getBytes(StandardCharsets.ISO_8859_1)));
         assertArrayEquals(new byte[0], new byte[0]);
     }
 

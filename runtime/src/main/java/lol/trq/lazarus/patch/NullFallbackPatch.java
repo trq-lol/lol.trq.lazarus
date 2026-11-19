@@ -1,9 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 package lol.trq.lazarus.patch;
 
-import java.util.Set;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
@@ -15,7 +12,6 @@ import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.VarInsnNode;
 
 /**
  * Gives a static lookup method a fallback: when it returns {@code null} and a hook accepts its arguments, it returns
@@ -24,9 +20,7 @@ import org.objectweb.asm.tree.VarInsnNode;
  * <p>The original method is renamed and a new method with the original name and descriptor wraps it. The hook takes
  * the method's parameters and returns {@code boolean}.
  */
-public final class NullFallbackPatch implements ClassPatch {
-    private final String name;
-    private final String owner;
+public final class NullFallbackPatch extends TreePatch {
     private final String method;
     private final String descriptor;
     private final String hookOwner;
@@ -52,8 +46,7 @@ public final class NullFallbackPatch implements ClassPatch {
             String hookOwner,
             String hookName,
             String fallbackField) {
-        this.name = name;
-        this.owner = owner;
+        super(name, owner);
         this.method = method;
         this.descriptor = descriptor;
         this.hookOwner = hookOwner;
@@ -62,19 +55,7 @@ public final class NullFallbackPatch implements ClassPatch {
     }
 
     @Override
-    public String name() {
-        return name;
-    }
-
-    @Override
-    public Set<String> targets() {
-        return Set.of(owner);
-    }
-
-    @Override
-    public byte[] apply(String className, byte[] bytes) {
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
+    protected boolean transform(ClassNode node) {
         MethodNode original = null;
         for (MethodNode m : node.methods) {
             if (m.name.equals(method) && m.desc.equals(descriptor) && (m.access & Opcodes.ACC_STATIC) != 0) {
@@ -82,7 +63,7 @@ public final class NullFallbackPatch implements ClassPatch {
             }
         }
         if (original == null) {
-            return bytes;
+            return false;
         }
         String renamed = "lazarus$" + method;
         original.name = renamed;
@@ -93,18 +74,18 @@ public final class NullFallbackPatch implements ClassPatch {
         Type[] args = Type.getArgumentTypes(descriptor);
         MethodNode wrapper = new MethodNode(access, method, descriptor, null, null);
         InsnList code = wrapper.instructions;
-        loadArgs(code, args);
-        code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, renamed, descriptor, false));
+        loadArgs(code, args, 0);
+        code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner(), renamed, descriptor, false));
         LabelNode done = new LabelNode();
         LabelNode noFallback = new LabelNode();
         code.add(new InsnNode(Opcodes.DUP));
         code.add(new JumpInsnNode(Opcodes.IFNONNULL, done));
         code.add(new InsnNode(Opcodes.POP));
-        loadArgs(code, args);
+        loadArgs(code, args, 0);
         code.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC, hookOwner, hookName, Type.getMethodDescriptor(Type.BOOLEAN_TYPE, args), false));
         code.add(new JumpInsnNode(Opcodes.IFEQ, noFallback));
-        code.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, fallbackField, returnType.getDescriptor()));
+        code.add(new FieldInsnNode(Opcodes.GETSTATIC, owner(), fallbackField, returnType.getDescriptor()));
         code.add(new InsnNode(Opcodes.ARETURN));
         code.add(noFallback);
         code.add(new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
@@ -114,17 +95,6 @@ public final class NullFallbackPatch implements ClassPatch {
         code.add(new FrameNode(Opcodes.F_SAME1, 0, null, 1, new Object[] {returnType.getInternalName()}));
         code.add(new InsnNode(Opcodes.ARETURN));
         node.methods.add(wrapper);
-
-        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        node.accept(writer);
-        return writer.toByteArray();
-    }
-
-    private static void loadArgs(InsnList code, Type[] args) {
-        int slot = 0;
-        for (Type arg : args) {
-            code.add(new VarInsnNode(arg.getOpcode(Opcodes.ILOAD), slot));
-            slot += arg.getSize();
-        }
+        return true;
     }
 }

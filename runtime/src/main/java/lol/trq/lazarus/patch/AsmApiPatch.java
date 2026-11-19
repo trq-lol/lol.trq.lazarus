@@ -3,8 +3,6 @@ package lol.trq.lazarus.patch;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -23,7 +21,7 @@ import org.objectweb.asm.tree.MethodNode;
  *
  * <p>Only a constant that reaches a constructor taking an {@code int} first, within a few instructions, is changed.
  */
-public final class AsmApiPatch implements ClassPatch {
+public final class AsmApiPatch extends TreePatch {
     static final int ASM4 = 4 << 16;
     static final int ASM5 = 5 << 16;
     static final int ASM6 = 6 << 16;
@@ -38,12 +36,8 @@ public final class AsmApiPatch implements ClassPatch {
      * @param prefixes internal-name prefixes of the legacy code to patch
      */
     public AsmApiPatch(Set<String> prefixes) {
+        super("asm-api-level", null);
         this.prefixes = Set.copyOf(prefixes);
-    }
-
-    @Override
-    public String name() {
-        return "asm-api-level";
     }
 
     @Override
@@ -58,36 +52,35 @@ public final class AsmApiPatch implements ClassPatch {
 
     @Override
     public byte[] apply(String className, byte[] bytes) {
-        if (!contains(bytes, ASM_MARKER)) {
+        if (!Bytes.contains(bytes, ASM_MARKER)) {
             return bytes;
         }
-        ClassNode node = new ClassNode();
-        new ClassReader(bytes).accept(node, 0);
+        return super.apply(className, bytes);
+    }
+
+    @Override
+    protected boolean transform(ClassNode node) {
         boolean changed = false;
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-                Integer api = apiConstant(insn);
-                if (api != null && feedsAsmConstructor(insn)) {
+                if (isApiConstant(insn) && feedsAsmConstructor(insn)) {
                     method.instructions.set(insn, insn = new LdcInsnNode(Opcodes.ASM9));
                     changed = true;
                 }
             }
         }
-        if (!changed) {
-            return bytes;
-        }
-        ClassWriter writer = new ClassWriter(0);
-        node.accept(writer);
-        return writer.toByteArray();
+        return changed;
     }
 
-    private static Integer apiConstant(AbstractInsnNode insn) {
-        if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof Integer value) {
-            if (value == ASM4 || value == ASM5 || value == ASM6) {
-                return value;
-            }
-        }
-        return null;
+    @Override
+    protected int writerFlags() {
+        return 0;
+    }
+
+    private static boolean isApiConstant(AbstractInsnNode insn) {
+        return insn instanceof LdcInsnNode ldc
+                && ldc.cst instanceof Integer value
+                && (value == ASM4 || value == ASM5 || value == ASM6);
     }
 
     /** Whether the constant reaches an ASM constructor taking an int first, within a few instructions. */
@@ -99,19 +92,6 @@ public final class AsmApiPatch implements ClassPatch {
                     && call.name.equals("<init>")) {
                 return call.desc.startsWith("(I");
             }
-        }
-        return false;
-    }
-
-    static boolean contains(byte[] haystack, byte[] needle) {
-        outer:
-        for (int i = 0; i <= haystack.length - needle.length; i++) {
-            for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) {
-                    continue outer;
-                }
-            }
-            return true;
         }
         return false;
     }

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-or-later */
 package lol.trq.lazarus.patch;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -51,7 +52,7 @@ public final class RelocatedAsmPatch implements ClassPatch {
 
     @Override
     public byte[] apply(String className, byte[] bytes) {
-        if (!AsmApiPatch.contains(bytes, relocatedAsm.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1))) {
+        if (!Bytes.contains(bytes, relocatedAsm.getBytes(StandardCharsets.ISO_8859_1))) {
             return bytes;
         }
         ClassReader reader = new ClassReader(bytes);
