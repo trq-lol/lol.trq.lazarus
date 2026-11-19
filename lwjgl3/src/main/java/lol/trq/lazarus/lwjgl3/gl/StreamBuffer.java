@@ -23,7 +23,7 @@ import org.lwjgl.system.MemoryUtil;
  * </ul>
  *
  * <p>Apple's OpenGL waits for the GPU on {@code glBufferSubData} into a buffer that is still in use, so Apple
- * drivers default to {@code orphan}; everything else defaults to {@code subdata}.
+ * drivers default to {@code map}, which measured fastest there; everything else defaults to {@code subdata}.
  */
 final class StreamBuffer {
     private static final int FRAMES = 3;
@@ -64,7 +64,7 @@ final class StreamBuffer {
             return Mode.valueOf(requested.toUpperCase(Locale.ROOT));
         }
         String vendor = GL11C.glGetString(GL11C.GL_VENDOR);
-        return vendor != null && vendor.toLowerCase(Locale.ROOT).contains("apple") ? Mode.ORPHAN : Mode.SUBDATA;
+        return vendor != null && vendor.toLowerCase(Locale.ROOT).contains("apple") ? Mode.MAP : Mode.SUBDATA;
     }
 
     /** {@return the buffer that the last {@link #reserve} bound} */

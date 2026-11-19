@@ -111,6 +111,9 @@ public final class CoreGl {
     private static final Map<Integer, ProgramBuiltins> programBuiltins = new ConcurrentHashMap<>();
     private static final Mat4 modelViewProjection = new Mat4();
     private static final int[] boundTextures = new int[32];
+    private static final int[] viewport = new int[4];
+    private static boolean viewportKnown;
+    private static final boolean DEBUG = Boolean.getBoolean("lazarus.gl.debug");
     private static boolean tintOn;
     private static final float[] tint = new float[4];
 
@@ -414,6 +417,25 @@ public final class CoreGl {
         if (!setCap(cap, false)) toggle(cap, false);
     }
 
+    public static void glViewport(int x, int y, int width, int height) {
+        flush();
+        viewport[0] = x;
+        viewport[1] = y;
+        viewport[2] = width;
+        viewport[3] = height;
+        viewportKnown = true;
+        GL11C.glViewport(x, y, width, height);
+    }
+
+    /**
+     * Always {@code GL_NO_ERROR}: Minecraft checks for errors several times a frame, and each check is a driver round
+     * trip. With {@code lazarus.gl.debug} the real error flag is read, and the debug callback reports every error.
+     */
+    public static int glGetError() {
+        flush();
+        return DEBUG ? GL11C.glGetError() : GL11C.GL_NO_ERROR;
+    }
+
     /** Answered from tracked state, so it never stalls the driver. */
     public static boolean glIsEnabled(int cap) {
         flush();
@@ -624,6 +646,7 @@ public final class CoreGl {
     // ---- current attributes
 
     public static void glColor4f(float r, float g, float b, float a) {
+        if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && record(() -> glColor4f(r, g, b, a))) return;
         color[0] = r;
         color[1] = g;
@@ -640,6 +663,7 @@ public final class CoreGl {
     }
 
     public static void glNormal3f(float x, float y, float z) {
+        if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && record(() -> glNormal3f(x, y, z))) return;
         normal[0] = x;
         normal[1] = y;
@@ -647,11 +671,13 @@ public final class CoreGl {
     }
 
     public static void glTexCoord2f(float s, float t) {
+        if (beginMode < 0 && rawCount > 0) flush();
         uv0[0] = s;
         uv0[1] = t;
     }
 
     public static void glMultiTexCoord2f(int target, float s, float t) {
+        if (beginMode < 0 && rawCount > 0) flush();
         if (beginMode < 0 && record(() -> glMultiTexCoord2f(target, s, t))) return;
         float[] uv = target == GL13C.GL_TEXTURE1 ? uv1 : uv0;
         uv[0] = s;
@@ -700,26 +726,105 @@ public final class CoreGl {
             recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count).draw(mode));
             if (!executeWhileRecording) return;
         }
+        if (rawCount > 0) {
+            flush();
+        }
         if (!appendTriangles(mode, count)) {
             flush();
             drawImmediate(immediate, count, mode);
         }
     }
 
+    // ---- raw batching of client-array draws
+
+    /** Vertex bytes of consecutive client-array draws that share one interleaved layout and primitive. */
+    private static ByteBuffer raw = MemoryUtil.memAlloc(1 << 20);
+
+    private static int rawCount;
+    private static int rawMode;
+    private static int rawStride;
+    private static final int[] rawLayout = new int[15];
+    private static final int[] layout = new int[15];
+    private static final int RAW_LIMIT = 4 << 20;
+
     /**
-     * Whether a client-array draw can join the batch: small, every enabled array in client memory, and only the
-     * attributes the interleaved layout carries.
+     * Appends a client-array draw to the raw batch when every enabled array lives in one interleaved buffer, as
+     * Minecraft's tessellator lays them out, and the draw has the same layout and primitive as the batch. Quads and
+     * triangles only; the bytes are copied as they are.
      */
-    private static boolean batchable(int count) {
-        if (count > 1024 || !vertexArray.enabled) {
+    private static boolean appendRaw(int mode, int first, int count) {
+        if ((mode != GL_QUADS && mode != GL11C.GL_TRIANGLES) || !vertexArray.enabled || count > 65536) {
             return false;
         }
-        for (Array a : attribArrays) {
-            if (a.enabled && a.memory == null) {
-                return false;
-            }
+        ByteBuffer memory = vertexArray.memory;
+        int stride = vertexArray.stride();
+        if (memory == null) {
+            return false;
         }
+        long base = Long.MAX_VALUE;
+        for (Array a : attribArrays) {
+            if (!a.enabled) continue;
+            if (a.memory != memory || a.stride() != stride) return false;
+            base = Math.min(base, a.offset);
+        }
+        for (int i = 0; i < attribArrays.length; i++) {
+            Array a = attribArrays[i];
+            layout[i * 3] = a.enabled ? (int) (a.offset - base) : -1;
+            layout[i * 3 + 1] = a.enabled ? a.size : 0;
+            layout[i * 3 + 2] = a.enabled ? a.type : 0;
+        }
+        long bytes = (long) count * stride;
+        if (rawCount > 0
+                && (rawMode != mode
+                        || rawStride != stride
+                        || !Arrays.equals(rawLayout, layout)
+                        || (long) rawCount * stride + bytes > RAW_LIMIT)) {
+            flush();
+        }
+        if (batchCount > 0) {
+            flush();
+        }
+        if (rawCount == 0) {
+            rawMode = mode;
+            rawStride = stride;
+            System.arraycopy(layout, 0, rawLayout, 0, layout.length);
+        }
+        int at = rawCount * stride;
+        if (raw.capacity() < at + bytes) {
+            raw = MemoryUtil.memRealloc(raw, (int) Math.max(at + bytes, raw.capacity() * 2L));
+        }
+        long source = base + (long) first * stride;
+        if (memory.isDirect()) {
+            MemoryUtil.memCopy(MemoryUtil.memAddress0(memory) + source, MemoryUtil.memAddress0(raw) + at, bytes);
+        } else {
+            raw.put(at, memory, (int) source, (int) bytes);
+        }
+        rawCount += count;
         return true;
+    }
+
+    private static void flushRaw() {
+        int count = rawCount;
+        rawCount = 0;
+        prepareDraw();
+        bindContextVertexArray();
+        long bytes = (long) count * rawStride;
+        long at = stream.reserve(bytes);
+        stream.write(at, MemoryUtil.memAddress0(raw), bytes);
+        for (int i = 0; i < LOCATIONS.length; i++) {
+            int loc = LOCATIONS[i];
+            int offset = rawLayout[i * 3];
+            if (offset < 0) {
+                GL20C.glDisableVertexAttribArray(loc);
+                constant(loc);
+                continue;
+            }
+            int type = rawLayout[i * 3 + 2];
+            GL20C.glVertexAttribPointer(loc, rawLayout[i * 3 + 1], type, normalized(loc, type), rawStride, at + offset);
+            GL20C.glEnableVertexAttribArray(loc);
+        }
+        draw(rawMode, 0, count);
+        finishDraw();
     }
 
     /** Appends a primitive to the batch as triangles; returns false for lines and points. */
@@ -803,6 +908,9 @@ public final class CoreGl {
      * before every OpenGL call the emulator does not handle, so the batch always draws with the state it was built in.
      */
     public static void flush() {
+        if (rawCount > 0) {
+            flushRaw();
+        }
         int count = batchCount;
         if (count == 0) {
             return;
@@ -889,11 +997,8 @@ public final class CoreGl {
 
     public static void glDrawArrays(int mode, int first, int count) {
         if (count <= 0) return;
-        if (recording == null && batchable(count)) {
-            float[] data = gather(first, count);
-            if (appendTriangles(data, mode, count)) {
-                return;
-            }
+        if (recording == null && appendRaw(mode, first, count)) {
+            return;
         }
         flush();
         if (recording != null) {
@@ -1106,6 +1211,8 @@ public final class CoreGl {
         flush();
         if (pname == GL_MATRIX_MODE) {
             params.put(params.position(), matrixMode);
+        } else if (pname == GL11C.GL_VIEWPORT && viewportKnown) {
+            params.put(params.position(), viewport);
         } else {
             GL11C.glGetIntegerv(pname, params);
         }
