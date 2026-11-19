@@ -156,7 +156,6 @@ public final class CoreGl {
             Debug.install();
         }
         stream = new StreamBuffer();
-        boundArrayBuffer = stream.buffer;
         restoreArrayBuffer();
         quadIbo = GL15C.glGenBuffers();
         shader = new Shader();
@@ -584,7 +583,6 @@ public final class CoreGl {
         }
         prepareDraw();
         bindContextVertexArray();
-        bindArrayBuffer(stream.buffer);
         int floats = count * FLOATS;
         long at = stream.reserve(floats * 4L);
         stream.write(at, immediate, floats);
@@ -676,7 +674,6 @@ public final class CoreGl {
         }
         long at = 0;
         if (streamBytes > 0) {
-            bindArrayBuffer(stream.buffer);
             at = stream.reserve(streamBytes);
         }
         for (int i = 0; i < attribArrays.length; i++) {
@@ -707,7 +704,7 @@ public final class CoreGl {
             int loc = LOCATIONS[i];
             boolean norm = normalized(loc, a.type);
             if (a.memory != null) {
-                bindArrayBuffer(stream.buffer);
+                bindArrayBuffer(stream.current());
                 GL20C.glVertexAttribPointer(loc, a.size, a.type, norm, a.stride(), a.streamedAt);
             } else {
                 bindArrayBuffer(a.buffer);
@@ -991,6 +988,13 @@ public final class CoreGl {
             u.f3(s.lightAmbient, lightAmbient);
             u.i(s.light0, light0 ? 1 : 0);
             u.i(s.light1, light1 ? 1 : 0);
+        }
+    }
+
+    /** Closes a frame; called before every buffer swap. */
+    public static void endFrame() {
+        if (stream != null) {
+            stream.endFrame();
         }
     }
 

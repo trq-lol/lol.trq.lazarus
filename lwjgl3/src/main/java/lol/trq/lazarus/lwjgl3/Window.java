@@ -165,8 +165,19 @@ public final class Window {
         if (handle == NULL) {
             return;
         }
-        glfwSwapBuffers(handle);
+        swap();
         processMessages();
+    }
+
+    /** Swaps the window's buffers, first closing the emulator's frame when the core renderer is on. */
+    public static void swap() {
+        if (handle == NULL) {
+            return;
+        }
+        if (CORE) {
+            lol.trq.lazarus.lwjgl3.gl.CoreGl.endFrame();
+        }
+        glfwSwapBuffers(handle);
     }
 
     /** Processes window events, only on the main thread; GLFW forbids it elsewhere. */

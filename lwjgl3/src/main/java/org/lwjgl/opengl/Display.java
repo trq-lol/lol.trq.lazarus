@@ -108,7 +108,7 @@ public final class Display {
         if (!Window.created()) {
             return;
         }
-        glfwSwapBuffers(Window.handle());
+        Window.swap();
         if (processMessages) {
             Window.processMessages();
         }
@@ -123,7 +123,7 @@ public final class Display {
     /** Swaps buffers only. */
     public static void swapBuffers() {
         if (Window.created()) {
-            glfwSwapBuffers(Window.handle());
+            Window.swap();
         }
     }
 
