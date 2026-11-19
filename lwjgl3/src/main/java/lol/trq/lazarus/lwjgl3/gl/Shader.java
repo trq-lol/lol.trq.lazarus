@@ -123,6 +123,7 @@ final class Shader {
     final int fogEnd;
     final int fogDensity;
     final int fogColor;
+    final Uniforms uniforms;
 
     Shader() {
         int vs = compile(GL_VERTEX_SHADER, VERTEX);
@@ -158,6 +159,34 @@ final class Shader {
         fogEnd = glGetUniformLocation(program, "uFogEnd");
         fogDensity = glGetUniformLocation(program, "uFogDensity");
         fogColor = glGetUniformLocation(program, "uFogColor");
+        int maxLocation = 0;
+        for (int location : new int[] {
+            modelView,
+            projection,
+            tex0,
+            tex1,
+            normalMat,
+            lighting,
+            lightDir0,
+            lightDir1,
+            lightDiffuse0,
+            lightDiffuse1,
+            lightAmbient,
+            light0,
+            light1,
+            texture0,
+            texture1,
+            alphaFunc,
+            alphaRef,
+            fogMode,
+            fogStart,
+            fogEnd,
+            fogDensity,
+            fogColor
+        }) {
+            maxLocation = Math.max(maxLocation, location);
+        }
+        uniforms = new Uniforms(maxLocation + 1);
         int previous = glGetInteger(GL_CURRENT_PROGRAM);
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program, "uSampler0"), 0);

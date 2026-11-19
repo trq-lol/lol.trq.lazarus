@@ -5,9 +5,12 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL13C;
 import org.lwjgl.opengl.GL15C;
@@ -23,10 +26,10 @@ import org.lwjgl.system.MemoryUtil;
  *
  * <p>Emulated: immediate mode, client-side vertex arrays (from memory or a bound buffer), display lists, the
  * modelview/projection/texture matrix stacks, texture enables per unit, alpha test, fog, two directional lights with
- * colour material, {@code glGet} of matrices, and push/pop of the emulated state. Draws use one uber shader.
+ * colour material, {@code glGet} of matrices, and push/pop of the emulated state. Draws use one uber shader. Buffer
+ * and program bindings are tracked here so draws never query the driver.
  */
 public final class CoreGl {
-    // GL enums used here.
     static final int GL_MODELVIEW = 0x1700, GL_PROJECTION = 0x1701, GL_TEXTURE = 0x1702;
     static final int GL_TEXTURE_2D = 0x0DE1, GL_ALPHA_TEST = 0x0BC0, GL_FOG = 0x0B60, GL_LIGHTING = 0x0B50;
     static final int GL_LIGHT0 = 0x4000, GL_LIGHT1 = 0x4001, GL_COLOR_MATERIAL = 0x0B57;
@@ -36,15 +39,19 @@ public final class CoreGl {
     static final int GL_TEXTURE_COORD_ARRAY = 0x8078;
     static final int GL_QUADS = 0x0007, GL_QUAD_STRIP = 0x0008, GL_POLYGON = 0x0009;
     static final int GL_FOG_MODE = 0x0B65, GL_FOG_DENSITY = 0x0B62, GL_FOG_START = 0x0B63, GL_FOG_END = 0x0B64;
-    static final int GL_FOG_COLOR = 0x0B66, GL_LINEAR = 0x2601, GL_EXP = 0x0800;
-    static final int GL_POSITION = 0x1203, GL_DIFFUSE = 0x1201, GL_AMBIENT = 0x1200;
+    static final int GL_FOG_COLOR = 0x0B66;
+    static final int GL_POSITION = 0x1203, GL_DIFFUSE = 0x1201;
     static final int GL_LIGHT_MODEL_AMBIENT = 0x0B53;
     static final int GL_MODELVIEW_MATRIX = 0x0BA6, GL_PROJECTION_MATRIX = 0x0BA7, GL_TEXTURE_MATRIX = 0x0BA8;
     static final int GL_MATRIX_MODE = 0x0BA0, GL_COMPILE_AND_EXECUTE = 0x1301;
     static final int GL_FLOAT = 0x1406, GL_UNSIGNED_BYTE = 0x1401, GL_BYTE = 0x1400, GL_SHORT = 0x1402;
     static final int GL_UNSIGNED_SHORT = 0x1403, GL_INT = 0x1404, GL_DOUBLE = 0x140A;
+    private static final int GL_CLAMP = 0x2900, GL_CLAMP_TO_EDGE = 0x812F;
 
-    private static final int FLOATS = 14; // pos3 color4 uv0 2 uv1 2 normal3
+    /** Interleaved layout of immediate mode and display lists: position 3, colour 4, uv0 2, uv1 2, normal 3. */
+    private static final int FLOATS = 14;
+
+    private static final int[] LOCATIONS = {Shader.POS, Shader.COLOR, Shader.UV0, Shader.UV1, Shader.NORMAL};
 
     /** One client-side array: its format and where it points. */
     private static final class Array {
@@ -55,20 +62,33 @@ public final class CoreGl {
         ByteBuffer memory;
         long offset;
         int buffer;
+        long streamedAt;
+
+        int stride() {
+            return stride != 0 ? stride : size * typeSize(type);
+        }
+
+        long span(int first, int count) {
+            return (long) (first + count - 1) * stride() + (long) size * typeSize(type);
+        }
     }
 
     private static Shader shader;
-    private static final java.util.concurrent.ConcurrentHashMap<Long, Integer> vaos =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    private static int streamVbo;
+    private static StreamBuffer stream;
     private static int quadIbo;
     private static int quadIboQuads;
 
+    private static final Map<Long, Integer> contextVaos = new ConcurrentHashMap<>();
+    private static int boundVao = -1;
+    private static int boundArrayBuffer;
+    private static int gameArrayBuffer;
+    private static int boundProgram;
+    private static final float[] normalMatrix = new float[9];
+
     private static int matrixMode = GL_MODELVIEW;
-    private static final ArrayList<Mat4> modelView = stack();
-    private static final ArrayList<Mat4> projection = stack();
-    private static final ArrayList<Mat4> texture0 = stack();
-    private static final ArrayList<Mat4> texture1 = stack();
+    private static final MatrixStack modelView = new MatrixStack();
+    private static final MatrixStack projection = new MatrixStack();
+    private static final MatrixStack[] textureMatrix = {new MatrixStack(), new MatrixStack()};
 
     private static int activeTexture;
     private static int clientActiveTexture;
@@ -80,7 +100,7 @@ public final class CoreGl {
     private static int fogMode = 0x0800;
     private static float fogStart, fogEnd = 1f, fogDensity = 1f;
     private static final float[] fogColor = new float[4];
-    private static boolean lighting, light0, light1, colorMaterial;
+    private static boolean lighting, light0, light1;
     private static final float[] lightDir0 = {0, 0, 1}, lightDir1 = {0, 0, 1};
     private static final float[] lightDiffuse0 = {1, 1, 1}, lightDiffuse1 = {0, 0, 0};
     private static final float[] lightAmbient = {0.2f, 0.2f, 0.2f};
@@ -94,6 +114,7 @@ public final class CoreGl {
     private static final Array colorArray = new Array();
     private static final Array normalArray = new Array();
     private static final Array[] texArrays = {new Array(), new Array()};
+    private static final Array[] attribArrays = {vertexArray, colorArray, texArrays[0], texArrays[1], normalArray};
 
     private static int beginMode = -1;
     private static float[] immediate = new float[FLOATS * 1024];
@@ -104,44 +125,105 @@ public final class CoreGl {
     private static boolean executeWhileRecording;
     private static int nextList = 1;
 
-    private static final ArrayList<Object[]> attribStack = new ArrayList<>();
+    private record Attribs(
+            boolean[] textures,
+            boolean alphaTest,
+            int alphaFunc,
+            float alphaRef,
+            boolean fog,
+            boolean lighting,
+            boolean light0,
+            boolean light1,
+            float[] color,
+            boolean blend,
+            boolean depthTest,
+            boolean cullFace) {}
+
+    private static final ArrayList<Attribs> attribStack = new ArrayList<>();
 
     private CoreGl() {}
 
-    private static ArrayList<Mat4> stack() {
-        ArrayList<Mat4> s = new ArrayList<>();
-        s.add(new Mat4());
-        return s;
-    }
-
     /** Sets up the emulator on the current core context. Called once after the window's context exists. */
     public static void init() {
-        bindVao();
+        bindContextVertexArray();
         if (Boolean.getBoolean("lazarus.gl.debug")) {
             Debug.install();
         }
-        streamVbo = GL15C.glGenBuffers();
+        stream = new StreamBuffer();
+        boundArrayBuffer = stream.buffer;
+        restoreArrayBuffer();
         quadIbo = GL15C.glGenBuffers();
         shader = new Shader();
     }
 
+    // ---- bindings
+
     /** Vertex arrays are not shared between contexts, so each context (the window, Forge's splash) gets its own. */
-    private static void bindVao() {
-        long context = org.lwjgl.glfw.GLFW.glfwGetCurrentContext();
-        GL30C.glBindVertexArray(vaos.computeIfAbsent(context, k -> GL30C.glGenVertexArrays()));
+    static void bindContextVertexArray() {
+        long context = GLFW.glfwGetCurrentContext();
+        bindVertexArray(contextVaos.computeIfAbsent(context, k -> GL30C.glGenVertexArrays()));
     }
 
-    private static ArrayList<Mat4> current() {
+    static void bindVertexArray(int vao) {
+        if (vao != boundVao) {
+            GL30C.glBindVertexArray(vao);
+            boundVao = vao;
+        }
+    }
+
+    static void forgetVertexArray(int vao) {
+        if (boundVao == vao) {
+            boundVao = -1;
+        }
+    }
+
+    static void bindArrayBuffer(int buffer) {
+        if (buffer != boundArrayBuffer) {
+            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, buffer);
+            boundArrayBuffer = buffer;
+        }
+    }
+
+    private static void restoreArrayBuffer() {
+        bindArrayBuffer(gameArrayBuffer);
+    }
+
+    public static void glBindBuffer(int target, int buffer) {
+        if (target == GL15C.GL_ARRAY_BUFFER) {
+            gameArrayBuffer = buffer;
+            bindArrayBuffer(buffer);
+        } else {
+            GL15C.glBindBuffer(target, buffer);
+        }
+    }
+
+    public static void glBindBufferARB(int target, int buffer) {
+        glBindBuffer(target, buffer);
+    }
+
+    public static void glUseProgram(int program) {
+        if (program != boundProgram) {
+            GL20C.glUseProgram(program);
+            boundProgram = program;
+        }
+    }
+
+    public static void glUseProgramObjectARB(int program) {
+        glUseProgram(program);
+    }
+
+    // ---- matrices
+
+    private static MatrixStack current() {
         return switch (matrixMode) {
             case GL_PROJECTION -> projection;
-            case GL_TEXTURE -> activeTexture == 1 ? texture1 : texture0;
+            case GL_TEXTURE -> textureMatrix[Math.min(activeTexture, 1)];
             default -> modelView;
         };
     }
 
     private static Mat4 top() {
-        ArrayList<Mat4> s = current();
-        return s.get(s.size() - 1);
+        return current().top();
     }
 
     private static boolean record(Runnable op) {
@@ -151,8 +233,6 @@ public final class CoreGl {
         recording.add(op);
         return !executeWhileRecording;
     }
-
-    // ---- matrices
 
     public static void glMatrixMode(int mode) {
         if (record(() -> glMatrixMode(mode))) return;
@@ -166,14 +246,12 @@ public final class CoreGl {
 
     public static void glPushMatrix() {
         if (record(CoreGl::glPushMatrix)) return;
-        ArrayList<Mat4> s = current();
-        s.add(s.get(s.size() - 1).copy());
+        current().push();
     }
 
     public static void glPopMatrix() {
         if (record(CoreGl::glPopMatrix)) return;
-        ArrayList<Mat4> s = current();
-        if (s.size() > 1) s.remove(s.size() - 1);
+        current().pop();
     }
 
     public static void glTranslatef(float x, float y, float z) {
@@ -206,7 +284,7 @@ public final class CoreGl {
 
     public static void glMultMatrix(FloatBuffer m) {
         float[] a = new float[16];
-        m.duplicate().get(a);
+        m.get(m.position(), a);
         if (record(() -> top().mul(a))) return;
         top().mul(a);
     }
@@ -231,8 +309,7 @@ public final class CoreGl {
             case GL_LIGHTING -> lighting = on;
             case GL_LIGHT0 -> light0 = on;
             case GL_LIGHT1 -> light1 = on;
-            case GL_COLOR_MATERIAL -> colorMaterial = on;
-            case GL_NORMALIZE, GL_RESCALE_NORMAL -> {}
+            case GL_COLOR_MATERIAL, GL_NORMALIZE, GL_RESCALE_NORMAL -> {}
             default -> {
                 return cap >= GL_TEXTURE_GEN_S && cap <= GL_TEXTURE_GEN_Q;
             }
@@ -258,8 +335,8 @@ public final class CoreGl {
 
     public static void glTexGen(int coord, int pname, FloatBuffer params) {}
 
+    /** Wide lines are invalid in forward-compatible core contexts, which macOS requires. */
     public static void glLineWidth(float width) {
-        // Wide lines are invalid in forward-compatible core contexts (macOS).
         GL11C.glLineWidth(1f);
     }
 
@@ -280,26 +357,23 @@ public final class CoreGl {
     }
 
     public static void glFog(int pname, FloatBuffer params) {
-        if (pname == GL_FOG_COLOR) {
-            float[] c = new float[4];
-            params.duplicate().get(c);
-            if (record(() -> System.arraycopy(c, 0, fogColor, 0, 4))) return;
-            System.arraycopy(c, 0, fogColor, 0, 4);
-        } else {
+        if (pname != GL_FOG_COLOR) {
             glFogf(pname, params.get(params.position()));
+            return;
         }
+        float[] c = new float[4];
+        params.get(params.position(), c);
+        if (record(() -> System.arraycopy(c, 0, fogColor, 0, 4))) return;
+        System.arraycopy(c, 0, fogColor, 0, 4);
     }
 
     public static void glLight(int light, int pname, FloatBuffer params) {
         float[] v = new float[4];
-        params.duplicate().get(v, 0, Math.min(4, params.remaining()));
+        params.get(params.position(), v, 0, Math.min(4, params.remaining()));
         Runnable apply = () -> {
             boolean first = light == GL_LIGHT0;
             if (pname == GL_POSITION) {
-                float[] d = modelView.get(modelView.size() - 1).transformDir(v[0], v[1], v[2]);
-                float len = (float) Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                if (len > 0) for (int i = 0; i < 3; i++) d[i] /= len;
-                System.arraycopy(d, 0, first ? lightDir0 : lightDir1, 0, 3);
+                modelView.top().transformDirNormalized(v[0], v[1], v[2], first ? lightDir0 : lightDir1);
             } else if (pname == GL_DIFFUSE) {
                 System.arraycopy(v, 0, first ? lightDiffuse0 : lightDiffuse1, 0, 3);
             }
@@ -311,7 +385,7 @@ public final class CoreGl {
     public static void glLightModel(int pname, FloatBuffer params) {
         if (pname != GL_LIGHT_MODEL_AMBIENT) return;
         float[] v = new float[4];
-        params.duplicate().get(v, 0, Math.min(4, params.remaining()));
+        params.get(params.position(), v, 0, Math.min(4, params.remaining()));
         if (record(() -> System.arraycopy(v, 0, lightAmbient, 0, 3))) return;
         System.arraycopy(v, 0, lightAmbient, 0, 3);
     }
@@ -326,6 +400,7 @@ public final class CoreGl {
         glActiveTexture(texture);
     }
 
+    /** Client state: applies immediately, even while a display list is being compiled. */
     public static void glClientActiveTexture(int texture) {
         clientActiveTexture = Math.min(texture - GL13C.GL_TEXTURE0, 1);
     }
@@ -334,14 +409,12 @@ public final class CoreGl {
         glClientActiveTexture(texture);
     }
 
-    private static final int GL_CLAMP = 0x2900;
-
     public static void glTexParameteri(int target, int pname, int param) {
-        GL11C.glTexParameteri(target, pname, param == GL_CLAMP ? 0x812F : param);
+        GL11C.glTexParameteri(target, pname, param == GL_CLAMP ? GL_CLAMP_TO_EDGE : param);
     }
 
     public static void glTexParameterf(int target, int pname, float param) {
-        GL11C.glTexParameterf(target, pname, param == GL_CLAMP ? 0x812F : param);
+        GL11C.glTexParameterf(target, pname, param == GL_CLAMP ? GL_CLAMP_TO_EDGE : param);
     }
 
     /**
@@ -355,7 +428,7 @@ public final class CoreGl {
         int previous = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
         GL11C.glBindTexture(GL_TEXTURE_2D, texture);
         GL11C.glTexImage2D(
-                GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 1, 1, 0, GL11C.GL_RGBA, GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
+                GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 1, 1, 0, GL11C.GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
         GL11C.glBindTexture(GL_TEXTURE_2D, previous);
     }
 
@@ -412,40 +485,41 @@ public final class CoreGl {
     }
 
     public static void glVertex3f(float x, float y, float z) {
-        if (immediate.length < (immediateCount + 1) * FLOATS) {
-            immediate = java.util.Arrays.copyOf(immediate, immediate.length * 2);
-        }
         int o = immediateCount * FLOATS;
+        if (immediate.length < o + FLOATS) {
+            immediate = Arrays.copyOf(immediate, immediate.length * 2);
+        }
         float[] v = immediate;
         v[o] = x;
         v[o + 1] = y;
         v[o + 2] = z;
-        v[o + 3] = color[0];
-        v[o + 4] = color[1];
-        v[o + 5] = color[2];
-        v[o + 6] = color[3];
+        System.arraycopy(color, 0, v, o + 3, 4);
         v[o + 7] = uv0[0];
         v[o + 8] = uv0[1];
         v[o + 9] = uv1[0];
         v[o + 10] = uv1[1];
-        v[o + 11] = normal[0];
-        v[o + 12] = normal[1];
-        v[o + 13] = normal[2];
+        System.arraycopy(normal, 0, v, o + 11, 3);
         immediateCount++;
     }
 
     public static void glEnd() {
         int mode = beginMode;
         beginMode = -1;
-        if (immediateCount == 0) return;
-        float[] data = java.util.Arrays.copyOf(immediate, immediateCount * FLOATS);
         int count = immediateCount;
+        if (count == 0) return;
         if (recording != null) {
-            StaticMesh mesh = new StaticMesh(data, count);
-            recording.add(mesh.draw(mode));
+            recording.add(new StaticMesh(Arrays.copyOf(immediate, count * FLOATS), count).draw(mode));
             if (!executeWhileRecording) return;
         }
-        drawInterleaved(data, count, mode);
+        prepareDraw();
+        bindContextVertexArray();
+        bindArrayBuffer(stream.buffer);
+        int floats = count * FLOATS;
+        long at = stream.reserve(floats * 4L);
+        stream.write(at, immediate, floats);
+        bindInterleaved(at);
+        draw(mode, 0, count);
+        finishDraw();
     }
 
     // ---- client arrays
@@ -461,7 +535,7 @@ public final class CoreGl {
         a.memory = memory;
         // LWJGL 2 takes the buffer's address at its current position; Minecraft moves one shared buffer between calls.
         a.offset = memory != null ? memory.position() : offset;
-        a.buffer = memory == null ? GL11C.glGetInteger(GL15C.GL_ARRAY_BUFFER_BINDING) : 0;
+        a.buffer = memory == null ? gameArrayBuffer : 0;
     }
 
     public static void glVertexPointer(int size, int type, int stride, ByteBuffer pointer) {
@@ -517,58 +591,61 @@ public final class CoreGl {
     public static void glDrawArrays(int mode, int first, int count) {
         if (count <= 0) return;
         if (recording != null) {
-            // Display lists capture the vertex data at compile time.
-            float[] data = gather(first, count);
-            StaticMesh mesh = new StaticMesh(data, count);
-            recording.add(mesh.draw(mode));
+            recording.add(new StaticMesh(gather(first, count), count).draw(mode));
             if (!executeWhileRecording) return;
         }
         if (!vertexArray.enabled) return;
-        setUniforms();
-        bindVao();
-        int uploaded = 0;
-        Array[] arrays = {vertexArray, colorArray, texArrays[0], texArrays[1], normalArray};
-        int[] locations = {Shader.POS, Shader.COLOR, Shader.UV0, Shader.UV1, Shader.NORMAL};
+        prepareDraw();
+        bindContextVertexArray();
         long streamBytes = 0;
-        for (Array a : arrays) {
+        for (Array a : attribArrays) {
             if (a.enabled && a.memory != null) {
-                streamBytes += align(span(a, first, count));
+                streamBytes += align(a.span(first, count));
             }
         }
+        long at = 0;
         if (streamBytes > 0) {
-            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, streamVbo);
-            GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, streamBytes, GL15C.GL_STREAM_DRAW);
+            bindArrayBuffer(stream.buffer);
+            at = stream.reserve(streamBytes);
         }
-        for (int i = 0; i < arrays.length; i++) {
-            Array a = arrays[i];
-            int loc = locations[i];
+        for (int i = 0; i < attribArrays.length; i++) {
+            Array a = attribArrays[i];
+            int loc = LOCATIONS[i];
             if (!a.enabled) {
                 GL20C.glDisableVertexAttribArray(loc);
                 constant(loc);
                 continue;
             }
-            int stride = a.stride != 0 ? a.stride : a.size * typeSize(a.type);
             if (a.memory != null) {
-                long bytes = span(a, first, count);
-                ByteBuffer src = a.memory.duplicate();
-                src.limit((int) Math.min(src.capacity(), a.offset + bytes));
-                src.position((int) a.offset);
-                GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, streamVbo);
-                GL15C.glBufferSubData(GL15C.GL_ARRAY_BUFFER, uploaded, src);
-                GL20C.glVertexAttribPointer(loc, a.size, a.type, normalized(loc, a.type), stride, uploaded);
-                uploaded += (int) align(bytes);
+                long bytes = a.span(first, count);
+                if (a.memory.isDirect()) {
+                    StreamBuffer.write(at, MemoryUtil.memAddress0(a.memory) + a.offset, bytes);
+                } else {
+                    ByteBuffer copy = MemoryUtil.memAlloc((int) bytes);
+                    copy.put(0, a.memory, (int) a.offset, (int) bytes);
+                    StreamBuffer.write(at, MemoryUtil.memAddress0(copy), bytes);
+                    MemoryUtil.memFree(copy);
+                }
+                a.streamedAt = at;
+                at += align(bytes);
+            }
+        }
+        for (int i = 0; i < attribArrays.length; i++) {
+            Array a = attribArrays[i];
+            if (!a.enabled) continue;
+            int loc = LOCATIONS[i];
+            boolean norm = normalized(loc, a.type);
+            if (a.memory != null) {
+                bindArrayBuffer(stream.buffer);
+                GL20C.glVertexAttribPointer(loc, a.size, a.type, norm, a.stride(), a.streamedAt);
             } else {
-                GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, a.buffer);
-                GL20C.glVertexAttribPointer(loc, a.size, a.type, normalized(loc, a.type), stride, a.offset);
+                bindArrayBuffer(a.buffer);
+                GL20C.glVertexAttribPointer(loc, a.size, a.type, norm, a.stride(), a.offset);
             }
             GL20C.glEnableVertexAttribArray(loc);
         }
         draw(mode, first, count);
-    }
-
-    private static long span(Array a, int first, int count) {
-        int stride = a.stride != 0 ? a.stride : a.size * typeSize(a.type);
-        return (long) (first + count - 1) * stride + (long) a.size * typeSize(a.type);
+        finishDraw();
     }
 
     private static long align(long bytes) {
@@ -598,51 +675,50 @@ public final class CoreGl {
         };
     }
 
-    /** Reads enabled client arrays into the interleaved immediate-mode layout, for display list capture. */
+    /** Reads the enabled client arrays into the interleaved layout, for display list capture. */
     private static float[] gather(int first, int count) {
         float[] out = new float[count * FLOATS];
         for (int v = 0; v < count; v++) {
             int o = v * FLOATS;
-            float[] c = colorArray.enabled ? read(colorArray, first + v, true) : color;
-            float[] t0 = texArrays[0].enabled ? read(texArrays[0], first + v, false) : uv0;
-            float[] t1 = texArrays[1].enabled ? read(texArrays[1], first + v, false) : uv1;
-            float[] n = normalArray.enabled ? read(normalArray, first + v, true) : normal;
-            float[] p = vertexArray.enabled ? read(vertexArray, first + v, false) : new float[3];
-            out[o] = p[0];
-            out[o + 1] = p.length > 1 ? p[1] : 0;
-            out[o + 2] = vertexArray.size > 2 ? p[2] : 0;
-            for (int i = 0; i < 4; i++) out[o + 3 + i] = i < c.length ? c[i] : 1f;
-            out[o + 7] = t0[0];
-            out[o + 8] = t0[1];
-            out[o + 9] = t1[0];
-            out[o + 10] = t1[1];
-            out[o + 11] = n[0];
-            out[o + 12] = n[1];
-            out[o + 13] = n[2];
+            int index = first + v;
+            read(vertexArray, index, false, out, o, 3, null);
+            read(colorArray, index, true, out, o + 3, 4, color);
+            read(texArrays[0], index, false, out, o + 7, 2, uv0);
+            read(texArrays[1], index, false, out, o + 9, 2, uv1);
+            read(normalArray, index, true, out, o + 11, 3, normal);
         }
         return out;
     }
 
-    private static float[] read(Array a, int index, boolean normalize) {
-        float[] r = new float[Math.max(a.size, 4)];
-        if (a.size < 4) r[3] = 1f;
-        if (a.memory == null) {
-            return r; // buffer-sourced arrays in display lists are not captured
+    /**
+     * Writes {@code n} components of one vertex of an array into {@code out}; disabled or buffer-sourced arrays use
+     * {@code fallback} (or zeros). Missing components default to 0, and alpha to 1.
+     */
+    private static void read(Array a, int index, boolean normalize, float[] out, int at, int n, float[] fallback) {
+        if (!a.enabled || a.memory == null) {
+            for (int i = 0; i < n; i++) {
+                out[at + i] = fallback != null ? fallback[i] : 0f;
+            }
+            return;
         }
-        int stride = a.stride != 0 ? a.stride : a.size * typeSize(a.type);
-        int base = (int) a.offset + index * stride;
-        for (int i = 0; i < a.size; i++) {
-            int at = base + i * typeSize(a.type);
-            r[i] = switch (a.type) {
-                case GL_UNSIGNED_BYTE -> normalize ? (a.memory.get(at) & 0xFF) / 255f : a.memory.get(at) & 0xFF;
-                case GL_BYTE -> normalize ? Math.max(a.memory.get(at) / 127f, -1f) : a.memory.get(at);
-                case GL_SHORT -> normalize ? a.memory.getShort(at) / 32767f : a.memory.getShort(at);
-                case GL_INT -> a.memory.getInt(at);
-                case GL_DOUBLE -> (float) a.memory.getDouble(at);
-                default -> a.memory.getFloat(at);
+        ByteBuffer mem = a.memory;
+        int size = typeSize(a.type);
+        int base = (int) a.offset + index * a.stride();
+        for (int i = 0; i < n; i++) {
+            if (i >= a.size) {
+                out[at + i] = i == 3 ? 1f : 0f;
+                continue;
+            }
+            int p = base + i * size;
+            out[at + i] = switch (a.type) {
+                case GL_UNSIGNED_BYTE -> normalize ? (mem.get(p) & 0xFF) / 255f : mem.get(p) & 0xFF;
+                case GL_BYTE -> normalize ? Math.max(mem.get(p) / 127f, -1f) : mem.get(p);
+                case GL_SHORT -> normalize ? mem.getShort(p) / 32767f : mem.getShort(p);
+                case GL_INT -> mem.getInt(p);
+                case GL_DOUBLE -> (float) mem.getDouble(p);
+                default -> mem.getFloat(p);
             };
         }
-        return r;
     }
 
     // ---- display lists
@@ -654,12 +730,16 @@ public final class CoreGl {
     }
 
     public static void glNewList(int list, int mode) {
+        freeList(list);
         recording = new ArrayList<>();
         executeWhileRecording = mode == GL_COMPILE_AND_EXECUTE;
         lists.put(list, recording);
     }
 
     public static void glEndList() {
+        if (recording instanceof ArrayList<Runnable> ops) {
+            ops.trimToSize();
+        }
         recording = null;
         executeWhileRecording = false;
     }
@@ -668,16 +748,23 @@ public final class CoreGl {
         List<Runnable> ops = lists.get(list);
         if (ops == null) return;
         if (record(() -> glCallList(list))) return;
-        for (Runnable op : ops) op.run();
+        for (int i = 0, n = ops.size(); i < n; i++) {
+            ops.get(i).run();
+        }
     }
 
     public static void glDeleteLists(int list, int range) {
         for (int i = 0; i < range; i++) {
-            List<Runnable> ops = lists.remove(list + i);
-            if (ops != null) {
-                for (Runnable op : ops) {
-                    if (op instanceof StaticMesh.Draw d) d.mesh().free();
-                }
+            freeList(list + i);
+            lists.remove(list + i);
+        }
+    }
+
+    private static void freeList(int list) {
+        List<Runnable> ops = lists.get(list);
+        if (ops != null) {
+            for (Runnable op : ops) {
+                if (op instanceof StaticMesh.Draw d) d.mesh().free();
             }
         }
     }
@@ -687,15 +774,15 @@ public final class CoreGl {
     public static void glGetFloat(int pname, FloatBuffer params) {
         Mat4 m =
                 switch (pname) {
-                    case GL_MODELVIEW_MATRIX -> modelView.get(modelView.size() - 1);
-                    case GL_PROJECTION_MATRIX -> projection.get(projection.size() - 1);
-                    case GL_TEXTURE_MATRIX -> (activeTexture == 1 ? texture1 : texture0).get(0);
+                    case GL_MODELVIEW_MATRIX -> modelView.top();
+                    case GL_PROJECTION_MATRIX -> projection.top();
+                    case GL_TEXTURE_MATRIX -> textureMatrix[Math.min(activeTexture, 1)].top();
                     default -> null;
                 };
         if (m == null) {
             GL11C.glGetFloatv(pname, params);
         } else {
-            params.duplicate().put(m.m);
+            params.put(params.position(), m.m);
         }
     }
 
@@ -716,39 +803,36 @@ public final class CoreGl {
     }
 
     public static void glPushAttrib(int mask) {
-        attribStack.add(new Object[] {
-            textureEnabled.clone(),
-            alphaTest,
-            alphaFunc,
-            alphaRef,
-            fog,
-            lighting,
-            light0,
-            light1,
-            colorMaterial,
-            color.clone(),
-            GL11C.glIsEnabled(GL11C.GL_BLEND),
-            GL11C.glIsEnabled(GL11C.GL_DEPTH_TEST),
-            GL11C.glIsEnabled(GL11C.GL_CULL_FACE)
-        });
+        attribStack.add(new Attribs(
+                textureEnabled.clone(),
+                alphaTest,
+                alphaFunc,
+                alphaRef,
+                fog,
+                lighting,
+                light0,
+                light1,
+                color.clone(),
+                GL11C.glIsEnabled(GL11C.GL_BLEND),
+                GL11C.glIsEnabled(GL11C.GL_DEPTH_TEST),
+                GL11C.glIsEnabled(GL11C.GL_CULL_FACE)));
     }
 
     public static void glPopAttrib() {
         if (attribStack.isEmpty()) return;
-        Object[] s = attribStack.remove(attribStack.size() - 1);
-        System.arraycopy((boolean[]) s[0], 0, textureEnabled, 0, 2);
-        alphaTest = (boolean) s[1];
-        alphaFunc = (int) s[2];
-        alphaRef = (float) s[3];
-        fog = (boolean) s[4];
-        lighting = (boolean) s[5];
-        light0 = (boolean) s[6];
-        light1 = (boolean) s[7];
-        colorMaterial = (boolean) s[8];
-        System.arraycopy((float[]) s[9], 0, color, 0, 4);
-        toggle(GL11C.GL_BLEND, (boolean) s[10]);
-        toggle(GL11C.GL_DEPTH_TEST, (boolean) s[11]);
-        toggle(GL11C.GL_CULL_FACE, (boolean) s[12]);
+        Attribs s = attribStack.remove(attribStack.size() - 1);
+        System.arraycopy(s.textures(), 0, textureEnabled, 0, 2);
+        alphaTest = s.alphaTest();
+        alphaFunc = s.alphaFunc();
+        alphaRef = s.alphaRef();
+        fog = s.fog();
+        lighting = s.lighting();
+        light0 = s.light0();
+        light1 = s.light1();
+        System.arraycopy(s.color(), 0, color, 0, 4);
+        toggle(GL11C.GL_BLEND, s.blend());
+        toggle(GL11C.GL_DEPTH_TEST, s.depthTest());
+        toggle(GL11C.GL_CULL_FACE, s.cullFace());
     }
 
     private static void toggle(int cap, boolean on) {
@@ -758,23 +842,18 @@ public final class CoreGl {
 
     // ---- drawing
 
-    static void drawInterleaved(float[] data, int count, int mode) {
-        setUniforms();
-        bindVao();
-        GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, streamVbo);
-        GL15C.glBufferData(GL15C.GL_ARRAY_BUFFER, data, GL15C.GL_STREAM_DRAW);
-        bindInterleaved();
-        draw(mode, 0, count);
+    static void bindInterleaved() {
+        bindInterleaved(0);
     }
 
-    static void bindInterleaved() {
+    private static void bindInterleaved(long base) {
         int stride = FLOATS * 4;
-        GL20C.glVertexAttribPointer(Shader.POS, 3, GL_FLOAT, false, stride, 0);
-        GL20C.glVertexAttribPointer(Shader.COLOR, 4, GL_FLOAT, false, stride, 12);
-        GL20C.glVertexAttribPointer(Shader.UV0, 2, GL_FLOAT, false, stride, 28);
-        GL20C.glVertexAttribPointer(Shader.UV1, 2, GL_FLOAT, false, stride, 36);
-        GL20C.glVertexAttribPointer(Shader.NORMAL, 3, GL_FLOAT, false, stride, 44);
-        for (int loc = 0; loc <= 4; loc++) GL20C.glEnableVertexAttribArray(loc);
+        GL20C.glVertexAttribPointer(Shader.POS, 3, GL_FLOAT, false, stride, base);
+        GL20C.glVertexAttribPointer(Shader.COLOR, 4, GL_FLOAT, false, stride, base + 12);
+        GL20C.glVertexAttribPointer(Shader.UV0, 2, GL_FLOAT, false, stride, base + 28);
+        GL20C.glVertexAttribPointer(Shader.UV1, 2, GL_FLOAT, false, stride, base + 36);
+        GL20C.glVertexAttribPointer(Shader.NORMAL, 3, GL_FLOAT, false, stride, base + 44);
+        for (int loc : LOCATIONS) GL20C.glEnableVertexAttribArray(loc);
     }
 
     static void draw(int mode, int first, int count) {
@@ -806,38 +885,43 @@ public final class CoreGl {
         quadIboQuads = n;
     }
 
-    static void setUniformsForList() {
-        setUniforms();
-        bindVao();
+    /** Binds the fixed-function shader and uploads whatever state changed since the last draw. */
+    static void prepareDraw() {
+        Shader s = shader;
+        glUseProgram(s.program);
+        Uniforms u = s.uniforms;
+        Mat4 mv = modelView.top();
+        u.mat4(s.modelView, mv.m);
+        u.mat4(s.projection, projection.top().m);
+        u.i(s.texture0, textureEnabled[0] ? 1 : 0);
+        u.i(s.texture1, textureEnabled[1] ? 1 : 0);
+        if (textureEnabled[0]) u.mat4(s.tex0, textureMatrix[0].top().m);
+        if (textureEnabled[1]) u.mat4(s.tex1, textureMatrix[1].top().m);
+        u.i(s.alphaFunc, alphaTest ? alphaFunc : 0);
+        if (alphaTest) u.f(s.alphaRef, alphaRef);
+        u.i(s.fogMode, fog ? fogMode : 0);
+        if (fog) {
+            u.f(s.fogStart, fogStart);
+            u.f(s.fogEnd, fogEnd);
+            u.f(s.fogDensity, fogDensity);
+            u.f4(s.fogColor, fogColor);
+        }
+        u.i(s.lighting, lighting ? 1 : 0);
+        if (lighting) {
+            mv.normalMatrix(normalMatrix);
+            u.mat3(s.normalMat, normalMatrix);
+            u.f3(s.lightDir0, lightDir0);
+            u.f3(s.lightDir1, lightDir1);
+            u.f3(s.lightDiffuse0, lightDiffuse0);
+            u.f3(s.lightDiffuse1, lightDiffuse1);
+            u.f3(s.lightAmbient, lightAmbient);
+            u.i(s.light0, light0 ? 1 : 0);
+            u.i(s.light1, light1 ? 1 : 0);
+        }
     }
 
-    private static void setUniforms() {
-        Shader s = shader;
-        GL20C.glUseProgram(s.program);
-        Mat4 mv = modelView.get(modelView.size() - 1);
-        GL20C.glUniformMatrix4fv(s.modelView, false, mv.m);
-        GL20C.glUniformMatrix4fv(s.projection, false, projection.get(projection.size() - 1).m);
-        GL20C.glUniformMatrix4fv(s.tex0, false, texture0.get(texture0.size() - 1).m);
-        GL20C.glUniformMatrix4fv(s.tex1, false, texture1.get(texture1.size() - 1).m);
-        GL20C.glUniform1i(s.texture0, textureEnabled[0] ? 1 : 0);
-        GL20C.glUniform1i(s.texture1, textureEnabled[1] ? 1 : 0);
-        GL20C.glUniform1i(s.alphaFunc, alphaTest ? alphaFunc : 0);
-        GL20C.glUniform1f(s.alphaRef, alphaRef);
-        GL20C.glUniform1i(s.fogMode, fog ? fogMode : 0);
-        GL20C.glUniform1f(s.fogStart, fogStart);
-        GL20C.glUniform1f(s.fogEnd, fogEnd);
-        GL20C.glUniform1f(s.fogDensity, fogDensity);
-        GL20C.glUniform4f(s.fogColor, fogColor[0], fogColor[1], fogColor[2], fogColor[3]);
-        GL20C.glUniform1i(s.lighting, lighting ? 1 : 0);
-        if (lighting) {
-            GL20C.glUniformMatrix3fv(s.normalMat, false, mv.normalMatrix());
-            GL20C.glUniform3f(s.lightDir0, lightDir0[0], lightDir0[1], lightDir0[2]);
-            GL20C.glUniform3f(s.lightDir1, lightDir1[0], lightDir1[1], lightDir1[2]);
-            GL20C.glUniform3f(s.lightDiffuse0, lightDiffuse0[0], lightDiffuse0[1], lightDiffuse0[2]);
-            GL20C.glUniform3f(s.lightDiffuse1, lightDiffuse1[0], lightDiffuse1[1], lightDiffuse1[2]);
-            GL20C.glUniform3f(s.lightAmbient, lightAmbient[0], lightAmbient[1], lightAmbient[2]);
-            GL20C.glUniform1i(s.light0, light0 ? 1 : 0);
-            GL20C.glUniform1i(s.light1, light1 ? 1 : 0);
-        }
+    /** Returns the array buffer binding to what the game last bound, which it may rely on after a draw. */
+    static void finishDraw() {
+        restoreArrayBuffer();
     }
 }

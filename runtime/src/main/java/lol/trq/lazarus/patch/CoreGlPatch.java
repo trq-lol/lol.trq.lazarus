@@ -17,8 +17,14 @@ import org.objectweb.asm.Opcodes;
  */
 final class CoreGlPatch implements ClassPatch {
     static final String EMULATOR = "lol/trq/lazarus/lwjgl3/gl/CoreGl";
-    private static final Set<String> OWNERS =
-            Set.of("org/lwjgl/opengl/GL11", "org/lwjgl/opengl/GL13", "org/lwjgl/opengl/ARBMultitexture");
+    private static final Set<String> OWNERS = Set.of(
+            "org/lwjgl/opengl/GL11",
+            "org/lwjgl/opengl/GL13",
+            "org/lwjgl/opengl/GL15",
+            "org/lwjgl/opengl/GL20",
+            "org/lwjgl/opengl/ARBMultitexture",
+            "org/lwjgl/opengl/ARBVertexBufferObject",
+            "org/lwjgl/opengl/ARBShaderObjects");
 
     private final Set<String> emulated;
 
