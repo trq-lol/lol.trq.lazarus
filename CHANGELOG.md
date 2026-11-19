@@ -3,6 +3,13 @@
 All notable changes are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the
 project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-19
+
+### Changed
+
+- The core renderer is now the default on the LWJGL 3 profile. `-Dlazarus.gl=compat` selects the legacy renderer.
+  The LWJGL 2 profile is unchanged.
+
 ## [0.3.0] - 2026-11-19
 
 ### Added

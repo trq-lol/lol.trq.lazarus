@@ -13,7 +13,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
- * With {@code -Dlazarus.gl=core}, sends the fixed-function GL calls of every game class to the LWJGL 3 jar's
+ * On LWJGL 3 (unless {@code -Dlazarus.gl=compat}), sends the fixed-function GL calls of every game class to the LWJGL 3 jar's
  * emulator, and flushes the emulator's batched draws before every other OpenGL call. The emulated set is read from
  * the emulator's own public static methods, so the two never drift.
  */
@@ -71,9 +71,9 @@ final class CoreGlPatch extends InvokeRewritePatch {
         this.emulated = emulated;
     }
 
-    /** {@return whether the core renderer was requested and the emulator is on the class path} */
+    /** {@return whether the core renderer is on (the default) and the emulator, which ships with LWJGL 3, is present} */
     static boolean enabled() {
-        return "core".equals(System.getProperty("lazarus.gl"))
+        return !"compat".equals(System.getProperty("lazarus.gl", "core"))
                 && ClassLoader.getSystemResource(EMULATOR + ".class") != null;
     }
 

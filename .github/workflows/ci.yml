@@ -63,7 +63,7 @@ jobs:
         run: |
           task=${{ matrix.lwjgl == 3 && format('runLwjgl3_{0}', matrix.java) || format('runLazarus{0}', matrix.java) }}
           jvm="-Dlazarus.smoke.world=true"
-          if [ "${{ matrix.gl }}" = core ]; then jvm="$jvm -Dlazarus.gl=core -Dlazarus.gl.debug=true -Dlazarus.smoke.postShader=invert -Dlazarus.smoke.hurt=true"; fi
+          if [ "${{ matrix.gl }}" = core ]; then jvm="$jvm -Dlazarus.gl.debug=true -Dlazarus.smoke.postShader=invert -Dlazarus.smoke.hurt=true"; else jvm="$jvm -Dlazarus.gl=compat"; fi
           xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew :harness:$task -Pmixin -Ptimeout=900 "-PjvmArgs=$jvm" | tee boot.log
           grep -q "LAZARUS-SMOKE OK at=menu java=${{ matrix.java }}" boot.log
           grep -q "LAZARUS-MIXIN OK" boot.log

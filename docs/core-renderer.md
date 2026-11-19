@@ -9,20 +9,30 @@ its shader packs are stuck there. On the core renderer they get OpenGL 4.1: Opti
 an Apple M2, and shader packs compile in full, including ones the legacy path cannot load at all. On Windows and
 Linux it works the same way, so one renderer covers every platform.
 
-## Turning it on
+## Using it
 
-The core renderer needs the LWJGL 3 profile (see [LWJGL 3](lwjgl3.md)). Add this to the profile's JVM arguments:
+The core renderer is the default on the LWJGL 3 profile (see [LWJGL 3](lwjgl3.md)); Minecraft, Forge, OptiFine and
+mods run on it as they are. To use the legacy renderer instead, add this to the profile's JVM arguments:
 
 ```
--Dlazarus.gl=core
+-Dlazarus.gl=compat
 ```
 
-Nothing else changes: Minecraft, Forge, OptiFine and mods run as they are.
+The LWJGL 2 profile always uses the legacy renderer.
 
 ## Shader packs
 
 OptiFine shader packs work on the core renderer. Turn off **Fast Render** and **Antialiasing** in OptiFine's video
 settings, as OptiFine requires for shaders.
+
+Supported packs:
+
+- **BSL Shaders** 10.1.8
+- **Complementary Reimagined** r5.10
+- **Sildur's Vibrant Shaders** 2.02
+
+Other packs usually work too; if one doesn't, open an issue with the pack's name and version and the output of a
+run with `-Dlazarus.gl.debug=true`.
 
 | Pack | Apple M2, core | Apple M2, legacy OpenGL 2.1 |
 |------|---|---|
@@ -53,7 +63,7 @@ BSL is also verified on Windows. Frame rates are in [benchmarks](benchmarks.md).
 
 | Property | Effect |
 |----------|--------|
-| `lazarus.gl=core` | Turns the core renderer on |
+| `lazarus.gl=compat` | Uses the legacy renderer on the LWJGL 3 profile instead of the core renderer |
 | `lazarus.gl.debug=true` | Requests a debug context and prints every driver-reported GL error with the Java call site, names fixed-function calls the emulator does not implement, and writes shaders that fail to compile to `lazarus-shaders/` |
 | `lazarus.gl.stream=subdata\|map` | How per-draw vertex data is uploaded. The default is `map` on Apple drivers and `subdata` elsewhere |
 

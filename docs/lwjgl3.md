@@ -3,6 +3,8 @@
 Minecraft 1.8.9 is written against LWJGL 2.9.4. Lazarus can run it on LWJGL 3 instead, for native Apple silicon
 support, GLFW windowing and input, and correct high-DPI scaling. It is optional: the default install keeps LWJGL 2.
 
+On LWJGL 3 the game renders through the [core renderer](core-renderer.md), an OpenGL 4.1 core profile, by default.
+
 ## Why not just swap the jars
 
 LWJGL 2 and LWJGL 3 share the `org.lwjgl` package and the JNI symbol names of their native libraries, so they cannot

@@ -16,7 +16,7 @@ Mojang and Forge, launched through Lazarus.
 Mixin 0.7.11 and registers through `MixinTweaker`, the way most 1.8.9 mods do, injected into `GuiMainMenu`.
 "World" means a new singleplayer world was created and played for five seconds on the integrated server.
 
-The core renderer (`-Dlazarus.gl=core`, see [core renderer](core-renderer.md)) boots into a world with no driver
+The core renderer (the LWJGL 3 default, see [core renderer](core-renderer.md)) boots into a world with no driver
 errors on Windows (NVIDIA), Linux (Mesa, in CI) and macOS (Apple M2), with OptiFine and with the BSL, Complementary
 Reimagined and Sildur's Vibrant shader packs.
 
