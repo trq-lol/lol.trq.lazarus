@@ -6,7 +6,7 @@ file on disk.
 
 ## Launch sequence
 
-```
+```sh
 java -javaagent:lol.trq.lazarus.jar -cp lol.trq.lazarus.jar:<forge libs>:<minecraft> lol.trq.lazarus.launch.Lazarus <args>
 
 LazarusAgent.premain
@@ -106,7 +106,7 @@ child's status. Set `-Dlazarus.noRelaunch=true` to turn it off.
 
 ### JVM flags
 
-```
+```text
 -XX:+IgnoreUnrecognizedVMOptions --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow
 -XX:-UseBASE64Intrinsics
 ```

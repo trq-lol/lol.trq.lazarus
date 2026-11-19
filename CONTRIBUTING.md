@@ -7,7 +7,7 @@
   `docs/how-it-works.md`.
 - A behaviour change is also booted in the game before it is merged:
 
-  ```
+  ```sh
   ./gradlew :harness:runLazarus17 -Pmixin
   ./gradlew :harness:runLazarus25 -Pmixin -PjvmArgs=-Dlazarus.smoke.world=true
   ```

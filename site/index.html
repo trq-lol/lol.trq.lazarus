@@ -2,7 +2,6 @@
 title: Lazarus
 ---
 {% capture readme %}{% include_relative README.md %}{% endcapture %}
-{% assign bench = site.pages | where: "path", "docs/benchmarks.md" | first %}
 <p class="lede">{{ site.description }}</p>
 
 <div class="actions">
@@ -17,10 +16,8 @@ title: Lazarus
 </ul>
 
 <h2>Faster on macOS</h2>
-<p>On a MacBook Air M2 the core renderer runs OptiFine at about <span class="stat">2.5x</span> the frame rate of the legacy OpenGL 2.1 path (568 fps against 223).</p>
-{% if bench.content contains "BSL" %}
+<p>On a MacBook Air M2 the core renderer runs OptiFine at about <span class="stat">2.4x</span> the frame rate of the legacy OpenGL 2.1 path (528 fps against 223).</p>
 <p>With the BSL shader pack it is about <span class="stat">3x</span> (81 fps against 26), and it runs BSL's shadows, which the legacy path cannot compile.</p>
-{% endif %}
 <p><a href="{{ '/docs/benchmarks.html' | relative_url }}">All benchmarks</a> · <a href="{{ '/docs/core-renderer.html' | relative_url }}">About the core renderer</a></p>
 
 <h2>Compatibility</h2>

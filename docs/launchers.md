@@ -50,7 +50,7 @@ To uninstall, delete the version folder and the profile in the launcher.
 2. Open the instance folder and put `lol.trq.lazarus-<version>.jar` into its `libraries` folder (create it).
 3. Save the component:
 
-   ```
+   ```sh
    java -jar lol.trq.lazarus-<version>.jar prism > lol.trq.lazarus.json
    ```
 

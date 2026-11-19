@@ -109,7 +109,7 @@ See [troubleshooting](docs/troubleshooting.md). `-Dlazarus.debug=true` logs ever
 
 ## Building
 
-```
+```sh
 ./gradlew spotlessApply build
 ```
 
@@ -125,7 +125,7 @@ Gradle downloads the JDKs it needs.
 
 Boot the game through Lazarus (the window starts muted and closes itself):
 
-```
+```sh
 ./gradlew :harness:runLazarus25 -Pmixin                        # Forge and a Mixin 0.7 mod on Java 25
 ./gradlew :harness:runLazarus21 -Poptifine=/path/OptiFine.jar  # with OptiFine (bring your own copy)
 ./gradlew :harness:runLwjgl3_25                                # LWJGL 3 on the core renderer
@@ -157,3 +157,7 @@ why:
 
 [LGPL-3.0-or-later](COPYING.LESSER), which supplements the [GPL-3.0](COPYING). See [DISCLAIMER](DISCLAIMER.md) and
 [NOTICE](NOTICE.md).
+
+## Activity
+
+![Repobeats analytics image](https://repobeats.axiom.co/api/embed/0548b05f0cfa00df82b27e2e1cbc4865a3d5dca9.svg "Repobeats analytics image")
