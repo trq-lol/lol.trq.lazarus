@@ -138,6 +138,9 @@ Boot the game through Lazarus (the window starts muted and closes itself):
 
 ## For AI agents
 
+Using it from Claude Code? Install the [trq-lol plugin](https://github.com/trq-lol/claude-plugin). The rest of this
+section is for working on this repository.
+
 [CLAUDE.md](CLAUDE.md) has the mental model, the patterns that matter and the traps. [llms.txt](llms.txt) indexes the
 files.
 

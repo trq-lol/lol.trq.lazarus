@@ -6,3 +6,12 @@ title: Install
 # Install
 
 {{ section }}
+
+## Use with Claude Code
+
+The [trq-lol plugin](https://github.com/trq-lol/claude-plugin) teaches Claude Code to install, configure and troubleshoot Lazarus.
+
+```
+/plugin marketplace add trq-lol/claude-plugin
+/plugin install trq-lol@trq-lol
+```
