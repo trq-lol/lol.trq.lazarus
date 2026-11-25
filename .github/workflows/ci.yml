@@ -52,7 +52,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libxxf86vm1 libxrandr2 libxcursor1 libxi6 x11-xserver-utils
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .harness-cache
           key: harness-${{ hashFiles('harness/src/**') }}
