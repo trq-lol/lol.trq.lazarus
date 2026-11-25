@@ -4,7 +4,7 @@ evaluationDependsOn(':smoke')
 evaluationDependsOn(':lwjgl3')
 evaluationDependsOn(':smoke-mixin')
 dependencies {
-    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'com.google.code.gson:gson:2.15.0'
 }
 
 def javaFor = { int version ->
